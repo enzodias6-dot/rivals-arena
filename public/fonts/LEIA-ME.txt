@@ -1,0 +1,11 @@
+FONTES DO SITE
+
+- Montserrat (textos, menus, formulários): já incluída (Montserrat-Variable.woff2), licença em Montserrat-OFL.txt.
+
+- Phoenix Gaming (títulos, botões e destaques): OPCIONAL e NÃO incluída no projeto.
+  Para usar, coloque o arquivo AQUI com um destes nomes (nesta ordem de preferência):
+      PhoenixGaming.woff2  |  PhoenixGaming.woff  |  PhoenixGaming.ttf  |  PhoenixGaming.otf
+  Reinicie o servidor (npm start). Nenhuma outra alteração é necessária:
+  o servidor detecta o arquivo e gera o CSS da fonte automaticamente (rota /css/fonte-titulos.css).
+  Enquanto o arquivo não existir, os títulos usam Montserrat ExtraBold.
+  Confira a licença de uso da Phoenix Gaming antes de publicá-la.

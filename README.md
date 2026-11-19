@@ -3,6 +3,14 @@
 Site acadêmico de torneios 1V1: cadastro/login, central, torneios com inscrição, desafios entre jogadores, ranking, perfil, arsenal e times.
 Backend em **Node.js + Express 5** com **MySQL**; frontend em HTML/CSS/JavaScript puro (sem build).
 
+## Situação atual e alinhamento acadêmico
+
+Este pacote corresponde ao **site/plataforma web** da Rivals Arena. Ele contém frontend, backend Express, rotas de API, scripts SQL e testes. O material de Projeto Integrador enviado também solicita responsividade, API RESTful, CRUD, regras de negócio, banco de dados integrado e documentação dos endpoints.
+
+**Estado técnico:** o código presente nesta entrega ainda utiliza MySQL. A migração para Supabase é a próxima etapa planejada, não uma funcionalidade concluída. O documento `docs/REQUISITOS_PROJETO_INTEGRADOR.md` relaciona os requisitos acadêmicos ao estado atual e aponta o que falta. O PDF de Jogos descreve um projeto de jogo temático separado; este ZIP não afirma entregar esse jogo.
+
+Não execute `npm run db:preparar` para configurar o Supabase: esse comando pertence ao banco MySQL atual.
+
 ## Requisitos
 
 - **Node.js 20 ou superior** (os testes automatizados exigem Node 22.5+)

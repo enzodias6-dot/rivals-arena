@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#080a0f">
+  <meta name="description" content="Entre ou crie sua conta para participar da Rivals Arena.">
+  <title>Acesso | Rivals Arena</title>
+  <link rel="icon" type="image/png" href="img/logo.png">
+  <link rel="stylesheet" href="css/fonte-titulos.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body data-page="auth">
+  <header id="hdr" class="site-header"></header>
+  <main class="auth-main">
+    <section class="auth-card">
+      <h1 id="auth-title">Acesso à Arena</h1>
+      <div class="boot" id="boot" aria-hidden="true"></div>
+
+      <div class="auth-tabs" role="tablist" aria-label="Tipo de acesso">
+        <button class="auth-tab" id="tab-login" type="button" role="tab" aria-selected="false">Já Tenho Conta</button>
+        <button class="auth-tab active" id="tab-register" type="button" role="tab" aria-selected="true">Criar Conta</button>
+      </div>
+
+      <div id="auth-message" class="auth-message" role="status" aria-live="polite" hidden></div>
+
+      <form id="login-form" class="auth-form" hidden>
+        <label for="login-email">Email</label>
+        <input id="login-email" name="email" type="email" autocomplete="email" maxlength="254" required placeholder="voce@exemplo.com">
+        <label for="login-password">Senha</label>
+        <input id="login-password" name="senha" type="password" autocomplete="current-password" required placeholder="Sua senha">
+        <button class="button-primary auth-submit" type="submit">Entrar na Conta</button>
+      </form>
+
+      <form id="register-form" class="auth-form">
+        <label for="register-name">Nome de Combatente</label>
+        <input id="register-name" name="nome" type="text" autocomplete="nickname" minlength="2" maxlength="80" required placeholder="Como quer ser chamado?">
+        <label for="register-email">Email</label>
+        <input id="register-email" name="email" type="email" autocomplete="email" maxlength="254" required placeholder="voce@exemplo.com">
+        <label for="register-password">Senha (Mínimo 8 Caracteres)</label>
+        <input id="register-password" name="senha" type="password" autocomplete="new-password" minlength="8" maxlength="72" required placeholder="Crie uma senha forte">
+        <button class="button-primary auth-submit" type="submit">Criar Conta</button>
+      </form>
+
+      <p class="meta auth-security">Nunca Compartilhe sua Senha!</p>
+
+    </section>
+  </main>
+  <footer>© 2026 Rivals Arena — Projeto Acadêmico.</footer>
+  <script src="js/comum.js"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>

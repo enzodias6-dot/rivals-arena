@@ -1,0 +1,461 @@
+.duel-hero {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(32px, 6vw, 76px);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(115deg, #17101a 0%, #11151e 58%, #25101a 100%);
+  box-shadow: var(--glow);
+}
+
+.duel-hero::after {
+  content: "1V1";
+  position: absolute;
+  right: 4%;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: clamp(90px, 18vw, 220px);
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+}
+
+.duel-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.duel-hero h2 {
+  margin: 10px 0;
+  font-size: clamp(30px, 5vw, 56px);
+  line-height: 1.12;
+}
+
+.duel-hero h2 span {
+  color: var(--red);
+}
+
+.duel-hero p {
+  max-width: 650px;
+  color: var(--muted);
+}
+
+.duel-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+
+.duel-actions .button-primary,
+.modal-actions .button-primary,
+.card-bottom .button-primary {
+  margin-top: 0;
+}
+
+.duel-actions .button-primary,
+.duel-actions .button-secondary {
+  width: 150px;
+  min-height: 46px;
+  padding: 6px 10px;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+
+.stat-card,
+.duel-card,
+.leaderboard-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.stat-card small,
+.muted-label {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.stat-card strong {
+  display: block;
+  font-size: 28px;
+  margin-top: 5px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 42px 0 18px;
+}
+
+.section-heading h2 {
+  margin: 0;
+  font-size: clamp(22px, 3vw, 30px);
+}
+
+.duel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.duel-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.duel-card h3 {
+  margin: 0;
+  font-size: 19px;
+}
+
+.pill {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 5px 9px;
+  border-radius: 5px;
+  background: rgba(255, 48, 79, 0.1);
+  color: var(--red-soft);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.pill.green {
+  background: rgba(85, 230, 165, 0.12);
+  color: var(--green);
+}
+
+.pill.gray {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+}
+
+.duel-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.player-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.player-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #ff304f, #79172c);
+  font-weight: 800;
+}
+
+.player-line strong {
+  display: block;
+}
+
+.player-line small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.leader-row {
+  display: grid;
+  grid-template-columns: 38px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 9px;
+  background: var(--panel-strong);
+}
+
+.rank-number {
+  font-weight: 800;
+  color: var(--red-soft);
+}
+
+.rank-points {
+  text-align: right;
+  font-weight: 800;
+}
+
+.rank-points small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.history-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 15px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.history-player:last-child {
+  text-align: right;
+}
+
+.history-player strong {
+  display: block;
+  font-size: 13px;
+}
+
+.history-player small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.history-score {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.notice-box {
+  margin-top: 24px;
+  padding: 14px 16px;
+  border-left: 3px solid var(--red);
+  background: rgba(255, 48, 79, 0.08);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.73);
+}
+
+.modal-backdrop.open {
+  display: flex;
+}
+
+.modal {
+  width: min(100%, 480px);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.7);
+}
+
+.modal h2 {
+  margin: 0 0 8px;
+  font-size: 23px;
+}
+
+.modal p {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.modal label {
+  display: block;
+  margin: 14px 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.modal input,
+.modal select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(9, 11, 17, 0.8);
+  color: var(--text);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+
+.accent {
+  color: var(--red);
+}
+
+/* ---------- Meus desafios ---------- */
+.challenge-list {
+  display: grid;
+  gap: 10px;
+}
+
+.challenge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.challenge-text strong {
+  display: block;
+}
+
+.challenge-text small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.challenge-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.duel-grid > .empty-state {
+  grid-column: 1 / -1;
+}
+
+.form-error {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 48, 79, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 48, 79, 0.12);
+  color: #ff939d !important;
+  font-size: 13px;
+}
+
+.modal input[readonly] {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.modal-backdrop .modal {
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+}
+
+@media (max-width: 760px) {
+  .stats-grid,
+  .duel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .history-row {
+    gap: 7px;
+    padding: 10px;
+  }
+
+  .history-score {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 560px) {
+  .modal input,
+  .modal select {
+    font-size: 16px;
+  }
+}
+
+/* ---------- Acabamento dos cartões e linhas ---------- */
+.duel-card,
+.leader-row,
+.history-row,
+.challenge-row {
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.duel-card:hover,
+.history-row:hover,
+.challenge-row:hover {
+  border-color: rgba(255, 48, 79, 0.5);
+}
+
+.leader-row:hover {
+  background: #1d2433;
+}
+
+.capacity {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.capacity::-webkit-progress-bar {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+}
+
+.capacity::-webkit-progress-value {
+  background: linear-gradient(90deg, var(--red), var(--red-soft));
+  border-radius: 999px;
+}
+
+.capacity::-moz-progress-bar {
+  background: linear-gradient(90deg, var(--red), var(--red-soft));
+  border-radius: 999px;
+}
+
+#tournament-filters {
+  margin-bottom: 16px;
+}

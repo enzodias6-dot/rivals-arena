@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#080a0f">
+  <meta name="description" content="Ranking dos combatentes da Rivals Arena, calculado pelos pontos salvos no banco de dados.">
+  <title>Ranking | Rivals Arena</title>
+  <link rel="icon" type="image/png" href="../img/logo.png">
+  <link rel="stylesheet" href="../css/fonte-titulos.css">
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body data-page="ranking">
+  <header id="hdr" class="site-header"></header>
+  <main>
+    <section class="page-header">
+      <h1>Ranking de Combatentes</h1>
+
+    </section>
+
+    <section class="section page-content">
+      <div class="podium" id="podium" aria-label="Três primeiros colocados" hidden></div>
+
+      <div class="toolbar">
+        <input id="rank-search" class="search-input" type="search" placeholder="Buscar combatente..." aria-label="Buscar combatente">
+        <div class="chip-group" role="group" aria-label="Quantidade de combatentes">
+          <button class="chip" type="button" data-limite="10" aria-pressed="false">Top 10</button>
+          <button class="chip" type="button" data-limite="25" aria-pressed="false">Top 25</button>
+          <button class="chip" type="button" data-limite="0" aria-pressed="true">Todos</button>
+        </div>
+        <button class="button-secondary compact" type="button" id="rank-me" hidden>Ver Minha Posição</button>
+        <span class="result-count" id="rank-count" role="status" aria-live="polite"></span>
+      </div>
+
+      <div class="table-wrap">
+        <table class="rank-table">
+          <thead>
+            <tr>
+              <th scope="col" data-campo="posicao" aria-sort="ascending"><button type="button">Posição</button></th>
+              <th scope="col" data-campo="nome"><button type="button">Combatente</button></th>
+              <th scope="col" class="num" data-campo="vitorias"><button type="button">Vitórias</button></th>
+              <th scope="col" class="num col-sec" data-campo="derrotas"><button type="button">Derrotas</button></th>
+              <th scope="col" class="num col-sec" data-campo="aproveitamento"><button type="button">Aproveitamento</button></th>
+              <th scope="col" class="num" data-campo="pontos"><button type="button">Pontos</button></th>
+            </tr>
+          </thead>
+          <tbody id="rank-body"></tbody>
+        </table>
+      </div>
+      <p class="empty-state" id="rank-status" role="status"></p>
+    </section>
+  </main>
+
+  <footer>© 2026 Rivals Arena — Projeto Acadêmico.</footer>
+  <script src="../js/comum.js"></script>
+  <script src="../js/ranking.js"></script>
+</body>
+</html>
