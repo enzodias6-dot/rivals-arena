@@ -1,120 +1,118 @@
 # Rivals Arena
 
-Site acadêmico de torneios 1V1: cadastro/login, central, torneios com inscrição, desafios entre jogadores, ranking, perfil, arsenal e times.
-Backend em **Node.js + Express 5** com **MySQL**; frontend em HTML/CSS/JavaScript puro (sem build).
-
-## Situação atual e alinhamento acadêmico
-
-Este pacote corresponde ao **site/plataforma web** da Rivals Arena. Ele contém frontend, backend Express, rotas de API, scripts SQL e testes. O material de Projeto Integrador enviado também solicita responsividade, API RESTful, CRUD, regras de negócio, banco de dados integrado e documentação dos endpoints.
-
-**Estado técnico:** o código presente nesta entrega ainda utiliza MySQL. A migração para Supabase é a próxima etapa planejada, não uma funcionalidade concluída. O documento `docs/REQUISITOS_PROJETO_INTEGRADOR.md` relaciona os requisitos acadêmicos ao estado atual e aponta o que falta. O PDF de Jogos descreve um projeto de jogo temático separado; este ZIP não afirma entregar esse jogo.
-
-Não execute `npm run db:preparar` para configurar o Supabase: esse comando pertence ao banco MySQL atual.
+Plataforma web acadêmica de torneios 1V1, ranking e perfil de combatentes. O projeto preserva o frontend em HTML, CSS e JavaScript puro e usa Node.js + Express 5 no backend. A persistência atual da aplicação foi migrada para Supabase (Auth e PostgreSQL).
 
 ## Requisitos
 
-- **Node.js 20 ou superior** (os testes automatizados exigem Node 22.5+)
-- **MySQL 5.7+ / 8.x** (ou MariaDB 10.4+) em execução
+- Node.js 20 ou superior.
+- Um projeto Supabase configurado com Auth, as tabelas e views descritas na seção abaixo.
 
-## Instalação e execução
+## Executar no Codespaces ou localmente
 
 ```bash
-# 1. dependências
 npm install
-
-# 2. configuração
-cp .env.example .env          # no Windows: copy .env.example .env
-npm run segredo               # gera um valor aleatório -> cole em JWT_SECRET no .env
-# edite o .env: DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
-
-# 3. banco de dados (cria o banco, as tabelas e os torneios iniciais; pode rodar várias vezes)
-npm run db:preparar
-
-# 4. iniciar
-npm start                     # http://localhost:3000   (npm run dev reinicia ao salvar)
+cp .env.example .env
 ```
 
-Se você já tinha um `.env` da versão anterior, pode reaproveitá-lo (os nomes das variáveis são os mesmos),
-**mas troque o `JWT_SECRET`**: ele precisa ter no mínimo 32 caracteres, senão o servidor se recusa a iniciar.
-
-### Variáveis do `.env`
-
-| Variável | Para que serve |
-|---|---|
-| `PORT` | Porta do site (padrão 3000) |
-| `JWT_SECRET` | Assina o cookie de login. Mínimo 32 caracteres, gere com `npm run segredo` |
-| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Conexão MySQL (padrões: 127.0.0.1, 3306, root, vazio, rivals_arena) |
-| `TRUST_PROXY` | (opcional) nº de proxies à frente do site, ex. `1`. Necessário atrás de HTTPS/proxy para o cookie `secure` e o limite por IP |
-
-## Estrutura
-
-```
-server.js                 ponto de entrada (valida .env, conecta o banco, inicia o servidor)
-src/
-  app.js                  monta o Express: segurança, API, páginas protegidas, 404, erros
-  config/                 env.js (variáveis e validações) · db.js (pool MySQL)
-  middlewares/            auth.js · seguranca.js (cabeçalhos, anti-CSRF) · limitador.js
-  routes/                 autenticacao · jogadores (perfil, ranking) · torneios · desafios
-  utils/validacao.js      validação de entradas
-database/
-  schema.sql              tabelas (usuarios, torneios, inscricoes, desafios, partidas)
-  dados-iniciais.sql      torneios iniciais (só entram se a tabela estiver vazia)
-public/                   frontend (css/, js/, img/, fonts/, pages/, acesso.html, index.html, 404.html)
-scripts/                  preparar-banco · gerar-segredo · verificar-sintaxe · verificar-links
-tests/                    testes automatizados da API (+ banco SQLite em memória para testes)
-docs/RELATORIO.md         relatório da análise e das correções
-```
-
-## Páginas e rotas
-
-| Rota | Acesso | O que é |
-|---|---|---|
-| `/acesso.html` | público | Login e cadastro |
-| `/` (ou `/central.html`) | logado | Central |
-| `/pages/campeonatos.html` | logado | 1V1: torneios, inscrição, desafios, ranking, histórico |
-| `/pages/ranking.html`, `perfil.html`, `arsenal.html`, `times.html` | logado | demais páginas |
-| `/api/...` | ver abaixo | API JSON |
-
-Visitantes sem sessão são redirecionados para `/acesso.html`. A sessão dura 2 horas (cookie `HttpOnly`, `SameSite=Strict`).
-
-### API
-
-Públicas: `GET /api/status` · `POST /api/usuarios` (cadastro) · `POST /api/login` · `POST /api/logout`
-Exigem login: `GET /api/perfil` · `GET /api/ranking` · `GET /api/resumo` · `GET /api/partidas` ·
-`GET /api/torneios` · `POST|DELETE /api/torneios/:id/inscricao` ·
-`GET|POST /api/desafios` · `PATCH /api/desafios/:id` (`{"acao":"aceitar"|"recusar"}`)
-
-## Administração (sem tela de admin nesta versão)
-
-- **Torneios**: edite a tabela `torneios` (colunas `inicio`, `vagas`, `status` = `aberto`/`em_breve`/`encerrado`).
-  ⚠️ As datas de início iniciais (02/11/2026 e 05/11/2026) são as do projeto original e já passaram: ajuste-as.
-- **Resultados**: insira em `partidas` (vencedor, perdedor, placares, fase) e atualize `pontos`, `vitorias` e `derrotas` em `usuarios`.
-  Essas contas ainda não são automáticas porque o projeto não define regras de pontuação.
-
-## Testes e verificações
+Edite `.env` com as credenciais públicas do seu projeto Supabase e inicie:
 
 ```bash
-npm run check      # sintaxe de todos os .js + links, arquivos e ids das páginas
-npm run test:api   # 45 testes de integração da API (precisa de Node 22.5+)
-npm test           # os dois acima
-node tests/helpers/servidor-teste.js 3100   # site completo com banco em memória, para testar no navegador sem MySQL
+npm start
+# http://localhost:3000
 ```
 
-## Fonte opcional "Phoenix Gaming"
+Para reiniciar o servidor ao alterar arquivos:
 
-Não acompanha o projeto. Coloque `PhoenixGaming.woff2` (ou `.woff`, `.ttf`, `.otf`) em `public/fonts/` e reinicie: o servidor detecta e aplica nos títulos. Veja `public/fonts/LEIA-ME.txt`.
+```bash
+npm run dev
+```
 
-## Publicação (produção)
+### Variáveis de ambiente
 
-- Defina `NODE_ENV=production` e use HTTPS (o cookie só é marcado `secure` em conexões HTTPS; atrás de proxy defina `TRUST_PROXY`).
-- Nunca versione o `.env` (já está no `.gitignore`).
-- O limitador de tentativas é em memória: com várias instâncias, use um armazenamento compartilhado (ex.: Redis).
-
-## Solução de problemas
-
-| Sintoma | Causa provável |
+| Variável | Uso |
 |---|---|
-| "JWT_SECRET ... muito curto" ao iniciar | Gere outro com `npm run segredo` e coloque no `.env` |
-| "Banco de dados indisponível" | MySQL desligado ou `DB_*` errados (confira a porta) |
-| "estrutura do banco desatualizada" | Rode `npm run db:preparar` |
-| "Muitas tentativas" (429) | Limite de login/cadastro; aguarde alguns minutos |
+| `SUPABASE_URL` | URL HTTPS do projeto Supabase |
+| `SUPABASE_ANON_KEY` | Chave anon ou publicável do projeto |
+| `SUPABASE_PUBLISHABLE_KEY` | Alternativa à variável anterior para a chave publicável |
+| `NODE_ENV` | Use `production` na publicação |
+| `PORT` | Porta local (padrão `3000`) |
+| `TRUST_PROXY` | Número de proxies confiáveis; configure como `1` na Vercel para IPs corretos e cabeçalhos HTTPS |
+
+Somente `SUPABASE_URL` e uma das duas variáveis de chave são necessárias para a aplicação; as demais têm padrão. O servidor aceita chaves `sb_publishable_` e chaves JWT legadas com `role=anon`, e rejeita chaves privadas ou com outro papel. Nunca use chaves privadas nem `service_role` no frontend ou nas variáveis desta aplicação. Não versione `.env`.
+
+O arquivo `.env.example` contém apenas valores fictícios. Não use a URL/chave de exemplo para uma conexão real.
+
+## Supabase e autenticação
+
+- O cadastro chama `supabase.auth.signUp()` com `options.data.nome` e pressupõe que o trigger existente no Supabase crie o perfil em `usuarios`; a aplicação não insere o perfil novamente nem armazena senhas nessa tabela. O inventário informa que o trigger está habilitado, mas seu corpo, owner, grants e compatibilidade com as colunas de `usuarios` ainda precisam ser confirmados.
+- Se a confirmação de email estiver habilitada, o cadastro pode não retornar uma sessão. A tela informa que o usuário deve confirmar o email e depois entrar normalmente.
+- O login usa Supabase Auth. A sessão fica em cookie `HttpOnly`, `SameSite=Strict` e `Secure` em produção. O backend valida o usuário com Supabase Auth, renova a sessão usando o refresh token e cria um cliente com o token daquele usuário para respeitar RLS.
+- Tokens não são guardados no `localStorage` ou `sessionStorage`. O cache opcional do navegador contém apenas dados de exibição do usuário, nunca credenciais.
+- O frontend e a API usam a mesma origem; operações que alteram dados também verificam o cabeçalho `Origin`.
+
+### Schema usado pela aplicação
+
+O inventário fornecido pela equipe confirma as tabelas `usuarios`, `campeonatos`, `inscricoes`, `partidas`, `desafios`, `times` e `membros_time`; `arsenal_itens` e `partida_resultados` não existem nesse inventário. Também foram informadas as views `vw_ranking`, `vw_ranking_publico` e `vw_perfis_publicos`. O inventário não inclui todas as colunas, constraints, funções, policies ou grants, portanto não confirma compatibilidade integral das rotas.
+
+O inventário confirma `partidas.resultado` como `VARCHAR` com constraint de placar numérico, por exemplo `2-1`. O histórico `GET /api/partidas` usa esse campo como fonte do resultado final. O fluxo novo foi alinhado para receber placar textual e só gravar o resultado canônico em `partidas.resultado` após confirmação; relatos pendentes e eventos dependem da migração `database/migrations/20261120_proposta_partidas_resultados_ivi.sql`, ainda não executada. O inventário não confirma as demais colunas/constraints necessárias, então agenda, relato, confirmação e contestação seguem bloqueados para integração real. A proposta não altera `pontos` nem ativa IVI.
+
+O inventário confirma `times` e `membros_time`, mas não informa seus campos, constraints, RPCs nem policies, e não encontrou `solicitacoes_time`. A migração atual de Times é de criação do zero e interrompe se encontrar as duas tabelas existentes; não deve ser aplicada. A página e as rotas dependem de um contrato ainda não confirmado. Capacidade de até cinco integrantes e regra de múltiplos times continuam propostas, não regras oficiais.
+
+O Arsenal consulta `arsenal_itens` publicados por API e oferece busca, categoria e detalhes. A tabela não existe no inventário fornecido. `database/migrations/20261120_proposta_arsenal.sql` propõe uma tabela nova com RLS e leitura de itens publicados por usuários autenticados; a migração não foi executada e não inclui itens fictícios. A página informa quando o catálogo está vazio.
+
+O cálculo Elo proposto é isolado e testado em `src/domain/ivi.js`, com rating inicial 1000, K=32 e escala 400. Não é fórmula aprovada nem alimenta o ranking. O ranking existente continua usando os valores armazenados de `pontos`, vitórias e derrotas.
+
+O inventário informa RLS habilitada nas sete tabelas existentes, mas não inclui as policies nem os grants completos. `vw_ranking_publico` usa `security_invoker=false` e requer revisão da definição, owner, colunas e grants; `vw_perfis_publicos` usa `security_invoker=true`. O trigger de criação de perfil foi informado como habilitado, mas o corpo da função não está versionado neste repositório. Nenhum SQL foi executado e nenhuma policy remota foi alterada. As operações autenticadas usam o token do próprio usuário; um bloqueio RLS não é contornado.
+
+As decisões, pressupostos, riscos, requisitos de RLS/grants e limitações das funcionalidades estão em [docs/PLANO_FUNCIONALIDADES_PENDENTES.md](./docs/PLANO_FUNCIONALIDADES_PENDENTES.md).
+
+A constraint informada `inscricoes_campeonato_id_jogador_id_key` impede nova linha para o mesmo jogador/campeonato mesmo após cancelamento. A rota verifica vagas antes do insert, mas isso não é atômico. A migração [20261120_proposta_inscricao_atomica_reinscricao.sql](./database/migrations/20261120_proposta_inscricao_atomica_reinscricao.sql) identifica somente essa constraint exata, bloqueia constraints/índices equivalentes adicionais e dependências FK, e a substitui por unicidade parcial de inscrições ativas. Não foi executada; colunas, estados, RLS/grants e dependências ainda precisam de homologação. A aplicação não chama a RPC antiga em [database/migrations/20261119_inscricao_atomica.sql](./database/migrations/20261119_inscricao_atomica.sql), que também não resolve a constraint global atual.
+
+As contagens de inscrições/resumo seguem exatamente o que as policies RLS deixam o usuário ler. Se o projeto restringir essas tabelas às próprias linhas, as contagens exibidas não serão globais e a verificação de vagas também não verá todas as inscrições.
+
+## Páginas e API
+
+| Página | Acesso |
+|---|---|
+| `/acesso.html` | Login e cadastro |
+| `/` ou `/index.html` | Central (usuário autenticado) |
+| `/pages/campeonatos.html` | Campeonatos, desafios, agenda/resultado preparado e histórico |
+| `/pages/ranking.html`, `/pages/perfil.html` | Ranking e perfil |
+| `/pages/arsenal.html` | Catálogo dinâmico; vazio até publicar itens reais no banco |
+| `/pages/times.html` | Interface existente; integração bloqueada até confirmar schema real e preparar migração incremental |
+
+Endpoints públicos: `GET /api/status`, `POST /api/usuarios`, `POST /api/login`, `POST /api/logout`.
+
+Endpoints autenticados incluem perfil, ranking, resumo, histórico, campeonatos, inscrições, desafios, Times (`/api/times`) e Arsenal (`/api/arsenal`). O histórico `GET /api/partidas` permanece compatível. `/api/partidas/agenda`, envio/confirmação/contestação de resultados e agendamento dependem da migração de partidas ainda não aplicada.
+
+Os endpoints de torneios continuam com esse nome por compatibilidade com o frontend; os dados são lidos de `campeonatos`. A criação define `status` como `aberto` e deriva `criador_id` do usuário autenticado para atender à policy RLS, sem aceitar esse identificador do navegador.
+
+`POST /api/torneios` recebe `nome`, `descricao`, `modalidade`, `formato`, `max_participantes`, `premio`, `inicio_em` e `encerramento_em`. A modalidade aceita `1v1`, `dupla`, `equipes` ou `solo`; o formato aceita `eliminacao_simples`, `grupos` ou `pontos`. As datas são timestamps ISO 8601 com fuso horário e podem ser omitidas.
+
+O histórico de inscrições consulta `inscricoes` usando o ID do usuário autenticado e inclui os status `pendente`, `aprovada` e `cancelada`, mantendo os IDs de inscrição e campeonato.
+
+## Testes
+
+```bash
+npm run check       # sintaxe JavaScript e integridade de links/IDs HTML
+npm run test:api    # testes HTTP com cliente Supabase simulado
+npm test            # executa as duas verificações
+```
+
+Os testes usam um mock em memória e cobrem autenticação, perfil/ranking, Times, Arsenal, inscrições, resultados/idempotência e regressões das rotas atuais; os testes de Elo e estados de resultado são puros. A simulação de RPC não comprova RLS, triggers, locks, constraints ou integração com Supabase real. As migrações SQL são propostas e não foram executadas.
+
+Para testar a interface no navegador sem Supabase, inicie `node tests/helpers/servidor-teste.js 3100` e crie uma conta no próprio ambiente simulado. Os dados são temporários e desaparecem ao parar o processo.
+
+## Publicação futura na Vercel
+
+O `vercel.json` encaminha as rotas do Express para `api/index.js` e inclui os arquivos de `public/`. Na configuração de ambiente da Vercel, cadastre `SUPABASE_URL`, `SUPABASE_ANON_KEY` (ou `SUPABASE_PUBLISHABLE_KEY`) e `NODE_ENV=production`. Não publique chaves privadas. Também configure no Supabase os domínios de redirect/URL de email apropriados para o domínio final, sem desabilitar confirmação de email.
+
+Configure `TRUST_PROXY=1` nas variáveis da Vercel. As variáveis atuais necessárias continuam sendo `SUPABASE_URL` e uma chave anon/publicável; as variáveis `DB_*` são somente para o preparador MySQL legado. A integração futura com o jogo deve ser jogo-servidor → API Express autenticada, nunca cliente do jogo → Supabase. Planeja-se uma credencial de servidor separada, mantida apenas em ambiente de backend, com hash armazenado, autorização de escopo restrito e chave de idempotência. Esse endpoint ainda não foi implementado; nenhum segredo de jogo é necessário hoje.
+
+O limitador de tentativas atual é mantido em memória por instância e não fornece um limite global entre instâncias serverless; um armazenamento compartilhado seria necessário para isso. A renovação paralela também é deduplicada apenas dentro de cada instância, então confira no painel Supabase a configuração de reutilização/rotação de refresh tokens para suportar requisições simultâneas em instâncias diferentes.
+
+Esta configuração prepara a aplicação, mas não publica o site nem valida a configuração remota. A primeira publicação ainda precisa confirmar execução da função, entrega dos arquivos estáticos, HTTPS/cookies, Site URL e allow-list de redirects do Auth, e acesso RLS.
+
+## MySQL legado
+
+O código de rotas e autenticação da aplicação usa Supabase. Os arquivos `database/schema.sql`, `database/dados-iniciais.sql`, `src/config/db.js` e `scripts/preparar-banco.js` são legados MySQL e foram mantidos; `mysql2` só é necessário ao preparador legado. `bcrypt` e `jsonwebtoken` não eram usados pelo código atual e foram removidos das dependências. `npm run db:preparar` é exclusivo do banco MySQL legado: **não o execute para configurar o Supabase**. Para usá-lo, configure separadamente `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` e `DB_NAME`; essas variáveis não são necessárias para a aplicação Supabase.

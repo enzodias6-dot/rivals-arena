@@ -3,31 +3,39 @@
 const express = require('express');
 
 const { criarLimitador } = require('../middlewares/limitador');
-const { validarNome, lerIdPositivo } = require('../utils/validacao');
+const { executar, clienteDaRequisicao } = require('../utils/supabase');
+const { validarNome, lerUuid } = require('../utils/validacao');
 
-function criarRotasDesafios({ db, config, auth }) {
+function criarRotasDesafios({ config }) {
   const router = express.Router();
   const limitarCriacao = criarLimitador({ ...config.limites.desafios, contar: 'todas' });
 
   router.get('/desafios', async (req, res) => {
-    const [linhas] = await db.execute(
-      `SELECT d.id, d.status, d.desafiante_id, a.nome AS desafiante, b.nome AS desafiado
-       FROM desafios d
-       JOIN usuarios a ON a.id = d.desafiante_id
-       JOIN usuarios b ON b.id = d.desafiado_id
-       WHERE d.desafiante_id = ? OR d.desafiado_id = ?
-       ORDER BY d.id DESC
-       LIMIT 20`,
-      [req.usuario.id, req.usuario.id]
+    const cliente = clienteDaRequisicao(req);
+    const { data: desafios } = await executar(
+      cliente.from('desafios')
+        .select('id,status,desafiante_id,desafiado_id')
+        .or(`desafiante_id.eq.${req.usuario.id},desafiado_id.eq.${req.usuario.id}`)
+        .order('data_criacao', { ascending: false })
+        .limit(20)
     );
 
+    const ids = [...new Set((desafios || []).flatMap((desafio) => [
+      desafio.desafiante_id,
+      desafio.desafiado_id
+    ]))];
+    const { data: perfis } = ids.length
+      ? await executar(cliente.from('vw_perfis_publicos').select('id,nome').in('id', ids))
+      : { data: [] };
+    const nomes = new Map((perfis || []).map((perfil) => [perfil.id, perfil.nome]));
+
     return res.json({
-      desafios: linhas.map((linha) => ({
-        id: linha.id,
-        desafiante: linha.desafiante,
-        desafiado: linha.desafiado,
-        status: linha.status,
-        direcao: linha.desafiante_id === req.usuario.id ? 'enviado' : 'recebido'
+      desafios: (desafios || []).map((desafio) => ({
+        id: desafio.id,
+        desafiante: nomes.get(desafio.desafiante_id) || null,
+        desafiado: nomes.get(desafio.desafiado_id) || null,
+        status: desafio.status,
+        direcao: desafio.desafiante_id === req.usuario.id ? 'enviado' : 'recebido'
       }))
     });
   });
@@ -36,12 +44,16 @@ function criarRotasDesafios({ db, config, auth }) {
     const oponente = validarNome((req.body || {}).oponente, 'O nome do adversário');
     if (oponente.erro) return res.status(400).json({ mensagem: oponente.erro });
 
-    const [candidatos] = await db.execute(
-      'SELECT id, nome FROM usuarios WHERE LOWER(nome) = LOWER(?) LIMIT 2',
-      [oponente.valor]
+    const nomeEscapado = oponente.valor.replace(/[\\%_]/g, '\\$&');
+    const cliente = clienteDaRequisicao(req);
+    const { data: candidatos } = await executar(
+      cliente.from('vw_perfis_publicos')
+        .select('id,nome')
+        .ilike('nome', nomeEscapado)
+        .limit(2)
     );
 
-    if (!candidatos.length) {
+    if (!candidatos?.length) {
       return res.status(404).json({ mensagem: 'Nenhum combatente com esse nome foi encontrado.' });
     }
     if (candidatos.length > 1) {
@@ -55,48 +67,57 @@ function criarRotasDesafios({ db, config, auth }) {
       return res.status(400).json({ mensagem: 'Você não pode desafiar a si mesmo.' });
     }
 
-    const [pendentes] = await db.execute(
-      `SELECT id FROM desafios
-       WHERE status = 'pendente'
-         AND ((desafiante_id = ? AND desafiado_id = ?) OR (desafiante_id = ? AND desafiado_id = ?))
-       LIMIT 1`,
-      [req.usuario.id, adversario.id, adversario.id, req.usuario.id]
+    const { data: existente } = await executar(
+      cliente.from('desafios')
+        .select('id')
+        .eq('status', 'pendente')
+        .eq('desafiante_id', req.usuario.id)
+        .eq('desafiado_id', adversario.id)
+        .maybeSingle()
     );
-    if (pendentes.length) {
+    const { data: inverso } = await executar(
+      cliente.from('desafios')
+        .select('id')
+        .eq('status', 'pendente')
+        .eq('desafiante_id', adversario.id)
+        .eq('desafiado_id', req.usuario.id)
+        .maybeSingle()
+    );
+    if (existente || inverso) {
       return res.status(409).json({ mensagem: 'Já existe um desafio pendente entre vocês dois.' });
     }
 
-    try {
-      const [resultado] = await db.execute(
-        'INSERT INTO desafios (desafiante_id, desafiado_id) VALUES (?, ?)',
-        [req.usuario.id, adversario.id]
-      );
-      return res.status(201).json({
-        mensagem: `Desafio enviado para ${adversario.nome}!`,
-        desafio: { id: Number(resultado.insertId) }
-      });
-    } catch (erro) {
-      if (erro.code === 'ER_NO_REFERENCED_ROW_2') {
-        auth.encerrarSessao(req, res);
-        return res.status(401).json({ mensagem: 'Sessão inválida ou expirada. Entre novamente.' });
+    const { data, error } = await cliente.from('desafios').insert({
+      desafiante_id: req.usuario.id,
+      desafiado_id: adversario.id
+    }).select('id').single();
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(409).json({ mensagem: 'Já existe um desafio pendente entre vocês dois.' });
       }
-      throw erro;
+      throw error;
     }
+
+    return res.status(201).json({
+      mensagem: `Desafio enviado para ${adversario.nome}!`,
+      desafio: { id: data.id }
+    });
   });
 
   router.patch('/desafios/:id', async (req, res) => {
-    const desafioId = lerIdPositivo(req.params.id);
+    const desafioId = lerUuid(req.params.id);
     const acao = (req.body || {}).acao;
     if (!desafioId || !['aceitar', 'recusar'].includes(acao)) {
       return res.status(400).json({ mensagem: 'Informe o desafio e a ação (aceitar ou recusar).' });
     }
 
-    const [linhas] = await db.execute(
-      'SELECT id, desafiado_id, status FROM desafios WHERE id = ? LIMIT 1',
-      [desafioId]
+    const cliente = clienteDaRequisicao(req);
+    const { data: desafio } = await executar(
+      cliente.from('desafios')
+        .select('id,desafiado_id,status')
+        .eq('id', desafioId)
+        .maybeSingle()
     );
-    const desafio = linhas[0];
-
     if (!desafio || desafio.desafiado_id !== req.usuario.id) {
       return res.status(404).json({ mensagem: 'Desafio não encontrado.' });
     }
@@ -105,12 +126,23 @@ function criarRotasDesafios({ db, config, auth }) {
     }
 
     const novoStatus = acao === 'aceitar' ? 'aceito' : 'recusado';
-    await db.execute(
-      "UPDATE desafios SET status = ?, respondido_em = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pendente'",
-      [novoStatus, desafioId]
+    const { data: atualizado } = await executar(
+      cliente.from('desafios')
+        .update({ status: novoStatus })
+        .eq('id', desafioId)
+        .eq('desafiado_id', req.usuario.id)
+        .eq('status', 'pendente')
+        .select('id')
+        .maybeSingle()
     );
+    if (!atualizado) {
+      return res.status(409).json({ mensagem: 'Este desafio já foi respondido.' });
+    }
 
-    return res.json({ mensagem: acao === 'aceitar' ? 'Desafio aceito!' : 'Desafio recusado.', status: novoStatus });
+    return res.json({
+      mensagem: acao === 'aceitar' ? 'Desafio aceito!' : 'Desafio recusado.',
+      status: novoStatus
+    });
   });
 
   return router;

@@ -55,6 +55,7 @@
       await acao(Object.fromEntries(new FormData(formulario).entries()));
     } catch (erro) {
       mostrarMensagem(erro.message, 'error');
+    } finally {
       botao.disabled = false;
       botao.textContent = textoOriginal;
     }
@@ -76,12 +77,15 @@
   formCadastro.addEventListener('submit', (evento) => {
     evento.preventDefault();
     enviar(formCadastro, 'Criando conta...', async (dados) => {
-      await post('usuarios', dados);
-      const { usuario } = await post('login', {
-        email: dados.email,
-        senha: dados.senha
-      });
-      guardarUsuario(usuario);
+      const resultado = await post('usuarios', dados);
+      if (!resultado.sessaoIniciada) {
+        mostrarMensagem(resultado.mensagem, 'success');
+        definirModo('login');
+        mostrarMensagem(resultado.mensagem, 'success');
+        return;
+      }
+
+      guardarUsuario(resultado.usuario);
       mostrarMensagem('Cadastro concluído! Entrando na arena...', 'success');
       irParaCentral();
     });

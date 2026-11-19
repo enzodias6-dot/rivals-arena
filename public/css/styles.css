@@ -526,6 +526,35 @@ thead th {
   margin: 0 auto;
 }
 
+.profile-edit-form {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.profile-edit-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.profile-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.profile-edit-actions .button-primary,
+.profile-edit-actions .button-secondary {
+  margin-top: 0;
+}
+
+.profile-name-feedback {
+  min-height: 1.5em;
+}
+
 .profile-avatar {
   width: 86px;
   height: 86px;

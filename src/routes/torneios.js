@@ -1,154 +1,301 @@
 'use strict';
 
 const express = require('express');
-const { lerIdPositivo } = require('../utils/validacao');
 
-function criarRotasTorneios({ db, auth }) {
+const { executar, buscarTodasAsPaginas, clienteDaRequisicao } = require('../utils/supabase');
+const { lerUuid, validarCriacaoCampeonato } = require('../utils/validacao');
+
+const ORDEM_STATUS = { aberto: 0, em_breve: 1, encerrado: 2 };
+const STATUS_INSCRICAO_ATIVA = ['pendente', 'aprovada'];
+
+function criarRotasTorneios() {
   const router = express.Router();
 
   router.get('/torneios', async (req, res) => {
-    const [linhas] = await db.execute(
-      `SELECT t.id, t.nome, t.descricao, t.formato, t.vagas, t.inicio, t.premiacao, t.status,
-              (SELECT COUNT(*) FROM inscricoes i WHERE i.torneio_id = t.id) AS inscritos,
-              EXISTS (SELECT 1 FROM inscricoes i WHERE i.torneio_id = t.id AND i.usuario_id = ?) AS inscrito
-       FROM torneios t
-       ORDER BY CASE t.status WHEN 'aberto' THEN 0 WHEN 'em_breve' THEN 1 ELSE 2 END, t.id`,
-      [req.usuario.id]
+    const cliente = clienteDaRequisicao(req);
+    const [campeonatos, inscricoes] = await Promise.all([
+      buscarTodasAsPaginas(() => cliente.from('campeonatos')
+        .select('id,nome,descricao,modalidade,formato,max_participantes,inicio_em,encerramento_em,premio,status', { count: 'exact' })),
+      buscarTodasAsPaginas(() => cliente.from('inscricoes')
+        .select('campeonato_id,jogador_id', { count: 'exact' })
+        .in('status', STATUS_INSCRICAO_ATIVA))
+    ]);
+
+    const contagens = new Map();
+    const meusCampeonatos = new Set();
+    for (const inscricao of inscricoes) {
+      contagens.set(inscricao.campeonato_id, (contagens.get(inscricao.campeonato_id) || 0) + 1);
+      if (inscricao.jogador_id === req.usuario.id) meusCampeonatos.add(inscricao.campeonato_id);
+    }
+
+    const torneios = campeonatos.map((campeonato) => ({
+      id: campeonato.id,
+      nome: campeonato.nome,
+      descricao: campeonato.descricao,
+      modalidade: campeonato.modalidade,
+      formato: campeonato.formato,
+      vagas: campeonato.max_participantes,
+      inicio: campeonato.inicio_em,
+      encerramento: campeonato.encerramento_em,
+      premiacao: campeonato.premio,
+      status: campeonato.status,
+      inscritos: contagens.get(campeonato.id) || 0,
+      inscrito: meusCampeonatos.has(campeonato.id)
+    })).sort((a, b) =>
+      (ORDEM_STATUS[a.status] ?? 3) - (ORDEM_STATUS[b.status] ?? 3) ||
+      String(a.id).localeCompare(String(b.id))
     );
 
-    return res.json({
-      torneios: linhas.map((linha) => ({
-        ...linha,
-        inscritos: Number(linha.inscritos),
-        inscrito: Boolean(linha.inscrito)
-      }))
-    });
+    return res.json({ torneios });
+  });
+
+  router.post('/torneios', async (req, res) => {
+    const dados = validarCriacaoCampeonato(req.body);
+    if (dados.erro) return res.status(400).json({ mensagem: dados.erro });
+
+    const cliente = clienteDaRequisicao(req);
+    const { data: campeonato, error } = await cliente.from('campeonatos')
+      .insert({
+        ...dados,
+        status: 'aberto',
+        criador_id: req.usuario.id
+      })
+      .select('id,nome,descricao,modalidade,formato,max_participantes,inicio_em,encerramento_em,premio,status,criador_id')
+      .single();
+
+    if (error) {
+      if (error.code === '42501' || error.status === 403) {
+        return res.status(403).json({ mensagem: 'A criação do campeonato foi bloqueada pelas políticas de acesso do Supabase.' });
+      }
+      if (['23502', '23514', '22P02'].includes(error.code)) {
+        return res.status(400).json({ mensagem: 'Os dados do campeonato não atendem às regras do banco.' });
+      }
+      if (error.code === '23505') {
+        return res.status(409).json({ mensagem: 'O campeonato entrou em conflito com um registro existente.' });
+      }
+      if (error.status === 401) {
+        return res.status(401).json({ mensagem: 'Sessão inválida ou expirada. Entre novamente.' });
+      }
+      if (error.status === 429) {
+        return res.status(429).json({ mensagem: 'Supabase limitou temporariamente as requisições. Aguarde e tente novamente.' });
+      }
+
+      const indisponivel = error.status >= 500 ||
+        error.name === 'AuthRetryableFetchError' ||
+        (error.name === 'TypeError' && /fetch failed|network/i.test(error.message || '')) ||
+        ['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT'].includes(error.code);
+      console.error('Falha ao criar campeonato no Supabase:', error.code || error.name || 'erro desconhecido');
+      return res.status(indisponivel ? 503 : 500).json({
+        mensagem: indisponivel
+          ? 'Supabase indisponível. Confira a conexão e tente novamente.'
+          : 'Não foi possível criar o campeonato. Tente novamente.'
+      });
+    }
+
+    if (!campeonato) {
+      console.error('Falha ao criar campeonato no Supabase: resposta sem registro.');
+      return res.status(500).json({ mensagem: 'Não foi possível confirmar a criação do campeonato.' });
+    }
+
+    return res.status(201).json({ mensagem: 'Campeonato criado com sucesso.', campeonato });
   });
 
   router.post('/torneios/:id/inscricao', async (req, res) => {
-    const torneioId = lerIdPositivo(req.params.id);
-    if (!torneioId) return res.status(400).json({ mensagem: 'Torneio inválido.' });
+    const campeonatoId = lerUuid(req.params.id);
+    if (!campeonatoId) return res.status(400).json({ mensagem: 'Torneio inválido.' });
 
-    const conexao = await db.getConnection();
-    try {
-      await conexao.beginTransaction();
+    const cliente = clienteDaRequisicao(req);
+    const { data: campeonato } = await executar(
+      cliente.from('campeonatos')
+        .select('id,nome,max_participantes,status')
+        .eq('id', campeonatoId)
+        .maybeSingle()
+    );
 
-      // FOR UPDATE trava a linha do torneio: duas inscrições simultâneas não passam do limite de vagas.
-      const [torneios] = await conexao.execute(
-        'SELECT id, nome, vagas, status FROM torneios WHERE id = ? FOR UPDATE',
-        [torneioId]
-      );
-      const torneio = torneios[0];
+    if (!campeonato) return res.status(404).json({ mensagem: 'Torneio não encontrado.' });
+    if (campeonato.status !== 'aberto') {
+      return res.status(409).json({ mensagem: 'As inscrições deste torneio não estão abertas.' });
+    }
 
-      if (!torneio) {
-        await conexao.rollback();
-        return res.status(404).json({ mensagem: 'Torneio não encontrado.' });
-      }
-      if (torneio.status !== 'aberto') {
-        await conexao.rollback();
-        return res.status(409).json({ mensagem: 'As inscrições deste torneio não estão abertas.' });
-      }
+    const { data: inscricaoExistente } = await executar(
+      cliente.from('inscricoes')
+        .select('id')
+        .eq('campeonato_id', campeonatoId)
+        .eq('jogador_id', req.usuario.id)
+        .in('status', STATUS_INSCRICAO_ATIVA)
+        .maybeSingle()
+    );
+    if (inscricaoExistente) {
+      return res.status(409).json({ mensagem: 'Você já está inscrito neste torneio.' });
+    }
 
-      const [jaInscrito] = await conexao.execute(
-        'SELECT id FROM inscricoes WHERE torneio_id = ? AND usuario_id = ? LIMIT 1',
-        [torneioId, req.usuario.id]
-      );
-      if (jaInscrito.length) {
-        await conexao.rollback();
-        return res.status(409).json({ mensagem: 'Você já está inscrito neste torneio.' });
-      }
+    const { count: totalInscricoes } = await executar(
+      cliente.from('inscricoes')
+        .select('id', { count: 'exact', head: true })
+        .eq('campeonato_id', campeonatoId)
+        .in('status', STATUS_INSCRICAO_ATIVA)
+    );
+    if (!Number.isInteger(totalInscricoes)) {
+      throw new Error('Supabase não retornou a contagem de inscrições necessária para verificar as vagas.');
+    }
+    if (totalInscricoes >= Number(campeonato.max_participantes)) {
+      return res.status(409).json({ mensagem: 'Todas as vagas deste torneio já foram preenchidas.' });
+    }
 
-      const [[contagem]] = await conexao.execute(
-        'SELECT COUNT(*) AS total FROM inscricoes WHERE torneio_id = ?',
-        [torneioId]
-      );
-      if (Number(contagem.total) >= torneio.vagas) {
-        await conexao.rollback();
+    const { error } = await cliente.from('inscricoes').insert({
+      campeonato_id: campeonatoId,
+      jogador_id: req.usuario.id
+    });
+    if (error) {
+      if (error.code === 'P0001' && error.message === 'championship_full') {
         return res.status(409).json({ mensagem: 'Todas as vagas deste torneio já foram preenchidas.' });
       }
-
-      await conexao.execute('INSERT INTO inscricoes (torneio_id, usuario_id) VALUES (?, ?)', [
-        torneioId,
-        req.usuario.id
-      ]);
-      await conexao.commit();
-
-      return res.status(201).json({
-        mensagem: `Inscrição confirmada em ${torneio.nome}!`,
-        inscritos: Number(contagem.total) + 1
-      });
-    } catch (erro) {
-      await conexao.rollback().catch(() => {});
-      if (erro.code === 'ER_DUP_ENTRY') {
+      if (error.code === 'P0001' && error.message === 'registration_closed') {
+        return res.status(409).json({ mensagem: 'As inscrições deste torneio não estão abertas.' });
+      }
+      if (error.code === '23505') {
         return res.status(409).json({ mensagem: 'Você já está inscrito neste torneio.' });
       }
-      if (erro.code === 'ER_NO_REFERENCED_ROW_2') {
-        auth.encerrarSessao(req, res);
-        return res.status(401).json({ mensagem: 'Sessão inválida ou expirada. Entre novamente.' });
-      }
-      throw erro;
-    } finally {
-      conexao.release();
+      throw error;
     }
+
+    return res.status(201).json({
+      mensagem: `Inscrição confirmada em ${campeonato.nome}!`,
+      inscritos: totalInscricoes + 1
+    });
   });
 
   router.delete('/torneios/:id/inscricao', async (req, res) => {
-    const torneioId = lerIdPositivo(req.params.id);
-    if (!torneioId) return res.status(400).json({ mensagem: 'Torneio inválido.' });
+    const campeonatoId = lerUuid(req.params.id);
+    if (!campeonatoId) return res.status(400).json({ mensagem: 'Torneio inválido.' });
 
-    const [torneios] = await db.execute('SELECT status FROM torneios WHERE id = ? LIMIT 1', [torneioId]);
-    if (!torneios.length) return res.status(404).json({ mensagem: 'Torneio não encontrado.' });
-    if (torneios[0].status !== 'aberto') {
+    const cliente = clienteDaRequisicao(req);
+    const { data: campeonato } = await executar(
+      cliente.from('campeonatos')
+        .select('status')
+        .eq('id', campeonatoId)
+        .maybeSingle()
+    );
+    if (!campeonato) return res.status(404).json({ mensagem: 'Torneio não encontrado.' });
+    if (campeonato.status !== 'aberto') {
       return res.status(409).json({ mensagem: 'Não é mais possível cancelar a inscrição neste torneio.' });
     }
 
-    const [resultado] = await db.execute(
-      'DELETE FROM inscricoes WHERE torneio_id = ? AND usuario_id = ?',
-      [torneioId, req.usuario.id]
+    const { data } = await executar(
+      cliente.from('inscricoes')
+        .update({ status: 'cancelada' })
+        .eq('campeonato_id', campeonatoId)
+        .eq('jogador_id', req.usuario.id)
+        .in('status', STATUS_INSCRICAO_ATIVA)
+        .select('id')
     );
-    if (!resultado.affectedRows) {
-      return res.status(404).json({ mensagem: 'Você não estava inscrito neste torneio.' });
+    if (!data?.length) {
+      return res.status(404).json({ mensagem: 'Você não possui uma inscrição ativa neste torneio.' });
     }
 
     return res.json({ mensagem: 'Inscrição cancelada.' });
   });
 
   router.get('/resumo', async (req, res) => {
-    const [[resumo]] = await db.query(
-      `SELECT (SELECT COUNT(*) FROM torneios WHERE status = 'aberto') AS torneios_abertos,
-              (SELECT COUNT(DISTINCT usuario_id) FROM inscricoes) AS jogadores_inscritos,
-              (SELECT COUNT(*) FROM partidas) AS partidas_concluidas`
-    );
+    const cliente = clienteDaRequisicao(req);
+    const [{ count: torneiosAbertos }, inscricoes, { count: partidasConcluidas }] = await Promise.all([
+      executar(cliente.from('campeonatos')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'aberto')),
+      buscarTodasAsPaginas(() => cliente.from('inscricoes')
+        .select('jogador_id', { count: 'exact' })
+        .in('status', STATUS_INSCRICAO_ATIVA)),
+      executar(cliente.from('partidas')
+        .select('id', { count: 'exact', head: true })
+        .not('concluida_em', 'is', null))
+    ]);
+    if (!Number.isInteger(torneiosAbertos) || !Number.isInteger(partidasConcluidas)) {
+      throw new Error('Supabase não retornou as contagens necessárias para montar o resumo.');
+    }
 
     return res.json({
-      torneiosAbertos: Number(resumo.torneios_abertos),
-      jogadoresInscritos: Number(resumo.jogadores_inscritos),
-      partidasConcluidas: Number(resumo.partidas_concluidas)
+      torneiosAbertos,
+      jogadoresInscritos: new Set(inscricoes.map((item) => item.jogador_id)).size,
+      partidasConcluidas
+    });
+  });
+
+  router.get('/historico/inscricoes', async (req, res) => {
+    const cliente = clienteDaRequisicao(req);
+    const inscricoes = await buscarTodasAsPaginas(() => cliente.from('inscricoes')
+      .select('id,campeonato_id,status,inscrito_em', { count: 'exact' })
+      .eq('jogador_id', req.usuario.id)
+      .in('status', ['pendente', 'aprovada', 'cancelada'])
+      .order('inscrito_em', { ascending: false }));
+
+    const idsCampeonatos = [...new Set(inscricoes.map((inscricao) => inscricao.campeonato_id))];
+    const { data: campeonatos } = idsCampeonatos.length
+      ? await executar(cliente.from('campeonatos')
+        .select('id,nome,modalidade,formato')
+        .in('id', idsCampeonatos))
+      : { data: [] };
+    const campeonatosPorId = new Map((campeonatos || []).map((campeonato) => [campeonato.id, campeonato]));
+
+    return res.json({
+      inscricoes: inscricoes.map((inscricao) => {
+        const campeonato = campeonatosPorId.get(inscricao.campeonato_id);
+        return {
+          id: inscricao.id,
+          campeonato_id: inscricao.campeonato_id,
+          campeonato: campeonato?.nome || null,
+          modalidade: campeonato?.modalidade || null,
+          formato: campeonato?.formato || null,
+          inscrito_em: inscricao.inscrito_em,
+          status: inscricao.status
+        };
+      })
     });
   });
 
   router.get('/partidas', async (req, res) => {
-    const [linhas] = await db.query(
-      `SELECT p.id, v.nome AS vencedor, d.nome AS perdedor,
-              p.placar_vencedor, p.placar_perdedor, p.fase, t.nome AS torneio
-       FROM partidas p
-       JOIN usuarios v ON v.id = p.vencedor_id
-       JOIN usuarios d ON d.id = p.perdedor_id
-       LEFT JOIN torneios t ON t.id = p.torneio_id
-       ORDER BY p.id DESC
-       LIMIT 10`
+    const cliente = clienteDaRequisicao(req);
+    const { data: partidas } = await executar(
+      cliente.from('partidas')
+        .select('id,campeonato_id,jogador_1_id,jogador_2_id,vencedor_id,fase,resultado,concluida_em')
+        .or(`jogador_1_id.eq.${req.usuario.id},jogador_2_id.eq.${req.usuario.id}`)
+        .not('concluida_em', 'is', null)
+        .order('concluida_em', { ascending: false })
+        .limit(10)
     );
 
+    const idsJogadores = [...new Set((partidas || [])
+      .flatMap((partida) => [partida.jogador_1_id, partida.jogador_2_id])
+      .filter(Boolean))];
+    const idsCampeonatos = [...new Set((partidas || []).map((partida) => partida.campeonato_id).filter(Boolean))];
+    const [perfisResult, campeonatosResult] = await Promise.all([
+      idsJogadores.length
+        ? executar(cliente.from('vw_perfis_publicos').select('id,nome').in('id', idsJogadores))
+        : Promise.resolve({ data: [] }),
+      idsCampeonatos.length
+        ? executar(cliente.from('campeonatos').select('id,nome').in('id', idsCampeonatos))
+        : Promise.resolve({ data: [] })
+    ]);
+    const nomes = new Map((perfisResult.data || []).map((perfil) => [perfil.id, perfil.nome]));
+    const nomesCampeonatos = new Map((campeonatosResult.data || []).map((item) => [item.id, item.nome]));
+
     return res.json({
-      partidas: linhas.map((linha) => ({
-        id: linha.id,
-        vencedor: linha.vencedor,
-        perdedor: linha.perdedor,
-        placarVencedor: linha.placar_vencedor,
-        placarPerdedor: linha.placar_perdedor,
-        fase: linha.fase,
-        torneio: linha.torneio
-      }))
+      partidas: (partidas || []).map((partida) => {
+        const vencedorEhJogador1 = partida.vencedor_id === partida.jogador_1_id;
+        const vencedorEhJogador2 = partida.vencedor_id === partida.jogador_2_id;
+        const perdedorId = vencedorEhJogador1
+          ? partida.jogador_2_id
+          : vencedorEhJogador2 ? partida.jogador_1_id : null;
+        return {
+          id: partida.id,
+          jogador1: nomes.get(partida.jogador_1_id) || null,
+          jogador2: nomes.get(partida.jogador_2_id) || null,
+          vencedor: nomes.get(partida.vencedor_id) || null,
+          perdedor: perdedorId ? nomes.get(perdedorId) || null : null,
+          resultado: partida.resultado,
+          fase: partida.fase,
+          torneio: nomesCampeonatos.get(partida.campeonato_id) || null
+        };
+      })
     });
   });
 

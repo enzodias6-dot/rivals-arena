@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#080a0f">
-  <meta name="description" content="Equipes da Rivals Arena (conteúdo ilustrativo do protótipo).">
+  <meta name="description" content="Gerencie times, integrantes e solicitações na Rivals Arena.">
   <title>Times | Rivals Arena</title>
   <link rel="icon" type="image/png" href="../img/logo.png">
   <link rel="stylesheet" href="../css/fonte-titulos.css">
@@ -14,38 +14,41 @@
   <header id="hdr" class="site-header"></header>
   <main>
     <section class="page-header">
-
       <h1>Times</h1>
     </section>
 
     <section class="section page-content">
-      <div class="card-grid">
-        <article class="content-card">
-          <span class="team-mark">NW</span>
-          <h2>Night Wolves</h2>
-          <p>Equipe focada em estratégia e trabalho coletivo.</p>
-          <p class="meta">Integrantes: 5 • Pontos: 4.560</p>
-        </article>
+      <p class="meta" role="note">A capacidade padrão de até cinco integrantes é uma proposta sujeita à aprovação da equipe do projeto.</p>
+      <p id="team-status" role="status" aria-live="polite"></p>
 
-        <article class="content-card">
-          <span class="team-mark">RC</span>
-          <h2>Red Comets</h2>
-          <p>Equipe conhecida pela velocidade e iniciativa.</p>
-          <p class="meta">Integrantes: 5 • Pontos: 4.130</p>
-        </article>
+      <section class="panel" aria-labelledby="team-create-heading">
+        <h2 id="team-create-heading">Criar time</h2>
+        <form id="team-create-form">
+          <label for="team-name">Nome</label>
+          <input id="team-name" name="nome" maxlength="80" required>
+          <label for="team-description">Descrição</label>
+          <textarea id="team-description" name="descricao" maxlength="1000" rows="3"></textarea>
+          <label for="team-capacity">Limite proposto de integrantes</label>
+          <select id="team-capacity" name="max_integrantes">
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5" selected>5</option>
+          </select>
+          <button class="button-primary" type="submit">Criar time</button>
+        </form>
+      </section>
 
-        <article class="content-card">
-          <span class="team-mark">IF</span>
-          <h2>Iron Foxes</h2>
-          <p>Equipe que prioriza organização e defesa.</p>
-          <p class="meta">Integrantes: 5 • Pontos: 3.790</p>
-        </article>
-      </div>
-
+      <section aria-labelledby="team-list-heading">
+        <h2 id="team-list-heading">Times cadastrados</h2>
+        <div id="team-list" class="card-grid" aria-live="polite"></div>
+      </section>
+      <section id="team-detail" class="section" aria-live="polite" hidden></section>
     </section>
   </main>
 
   <footer>© 2026 Rivals Arena — Projeto Acadêmico.</footer>
   <script src="../js/comum.js"></script>
+  <script src="../js/times.js"></script>
 </body>
 </html>

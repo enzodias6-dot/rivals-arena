@@ -48,7 +48,11 @@
 
   // ---- API ----
   async function api(caminho, { metodo = 'GET', corpo, naoRedirecionar401 = false } = {}) {
-    const opcoes = { method: metodo, headers: { Accept: 'application/json' } };
+    const opcoes = {
+      method: metodo,
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' }
+    };
     if (corpo !== undefined) {
       opcoes.headers['Content-Type'] = 'application/json';
       opcoes.body = JSON.stringify(corpo);

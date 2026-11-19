@@ -2,6 +2,8 @@
 
 Data: 06/11/2026 · Projeto de origem: `rivals-arena-v4-limpo.zip` (Node/Express 5, MySQL, HTML/CSS/JS puro).
 
+> **Nota de versão:** as seções 1–6 abaixo são o registro histórico da versão MySQL. O estado atual após a migração para Supabase e os testes atuais estão no adendo de 19/11/2026; as verificações de MySQL, SQLite e navegador descritas acima não comprovam a integração Supabase real.
+
 ## 1. Resumo
 
 O projeto original **não funcionava de ponta a ponta**: o login era sempre recusado, o banco não tinha estrutura versionada, a tela de acesso exibia os dois formulários ao mesmo tempo e a página 1V1 era toda demonstrativa (`alert()` e dados inventados). Foi reconstruído com estrutura organizada, banco documentado, inscrições e desafios reais, segurança reforçada e testes automatizados. A identidade visual foi mantida.
@@ -79,4 +81,35 @@ O ZIP trazia `DB_PASSWORD` e `JWT_SECRET` no `.env`. **Se o arquivo foi comparti
 6. **Fonte Phoenix Gaming** não está no pacote (nem estava no original); basta colocar o arquivo em `public/fonts/`.
 7. **Produção:** HTTPS/`secure` do cookie e o limitador em memória (instância única) não puderam ser testados num ambiente real de hospedagem.
 8. **Dependências:** sem acesso à internet, não rodei `npm audit` nem atualizei pacotes; foram mantidas as versões do `package.json` original (instaladas no seu `node_modules`).
-9. Os testes automatizados exigem **Node 22.5+** (`node:sqlite`); o site em si roda no Node 20+.
+9. **Compatibilidade de runtime (estado original):** os testes da versão MySQL exigiam Node 22.5+ (`node:sqlite`). Após a migração, `npm test` usa o mock Supabase e não importa esse helper; o SDK Supabase está fixado em `2.109.0`, cujos pacotes declaram suporte a Node 20+. `tests/helpers/bancoSqlite.js` permanece como utilitário legado sem uso pelos comandos atuais.
+
+## Adendo — migração para Supabase (19/11/2026)
+
+- O backend de autenticação e as rotas de perfil, ranking, campeonatos, inscrições, partidas e desafios foram migrados para Supabase Auth/PostgreSQL. Os IDs são tratados como UUID e cada operação autenticada usa o token do próprio usuário.
+- O cadastro usa `options.data.nome`; a aplicação não grava senha nem cria um segundo perfil em `usuarios`. A tela também contempla cadastro sem sessão imediata quando a confirmação de email está ativa.
+- O histórico passou a exibir somente os campos existentes (`jogador_1_id`, `jogador_2_id`, `vencedor_id`, `resultado`, `fase`, entre outros). Não são mais montados placares nem `perdedor_id` inexistentes no schema Supabase.
+- O arquivo `vercel.json` e `api/index.js` preparam a função Express para futura publicação. Nenhuma publicação foi feita.
+- Validação local desta migração: `npm test` passou (`npm run check`: 31 arquivos JavaScript e 8 páginas HTML; `npm run test:api`: 34 testes com Supabase simulado). Os testes também cobrem email não confirmado, renovação concorrente dentro de uma instância, rate limit ao renovar sem encerrar a sessão, paginação acima do limite configurado de linhas, respostas de rate limit e rejeição de colunas de partidas não documentadas. Também foi iniciado o servidor local simulado, que respondeu com HTTP 200 para `/acesso.html` e `status: ok` para `/api/status`.
+- O SDK Supabase foi fixado em `2.109.0`: versões posteriores da linha instalada exigem Node 22, incompatível com o mínimo Node 20 declarado pelo projeto. A árvore instalada foi verificada e os pacotes Supabase usados aceitam Node 20.
+- **A integração real não foi testada**: nenhum valor de configuração local foi lido nem foi feita conexão com o Supabase. As policies RLS ativas, o trigger de criação de perfil e as colunas reais das views não estão versionados e não foram alterados. É necessário conferir no painel Supabase que `vw_perfis_publicos` e `vw_ranking_publico` expõem as colunas consultadas e que as policies permitem as operações necessárias.
+- A contagem de inscrições depende das linhas visíveis via RLS; políticas que escondam inscrições de outros jogadores produzem contagens parciais. Além disso, sem transação ou RPC já existente, a checagem de última vaga não é atômica.
+- A paginação e as contagens agora pedem contagem exata ao PostgREST para não truncar silenciosamente nos limites de linhas. Ainda refletem apenas as linhas visíveis conforme RLS, e podem variar durante alterações concorrentes.
+- Na Vercel, configure `TRUST_PROXY=1`. O limitador por IP e a deduplicação de refresh token são locais a cada instância; não oferecem coordenação global entre funções serverless. O Supabase precisa estar configurado para tolerar a rotação concorrente de refresh tokens.
+- Os scripts, schema e configuração MySQL legados foram mantidos; `mysql2` é usado somente pelo preparador legado. As dependências `bcrypt` e `jsonwebtoken` foram removidas por não terem uso no código atual. `npm run db:preparar` continua sendo somente para MySQL e não deve ser executado para esta migração Supabase.
+- A rota de partidas solicita somente colunas documentadas, filtra jogos concluídos que envolvem o jogador autenticado e limita o histórico a 10 resultados. Na validação de 19/11, Times e Arsenal ainda eram demonstrativos; a situação foi atualizada no adendo de 20/11/2026 abaixo.
+- Foi preparada uma proposta de RPC atômica para inscrições em `database/migrations/20261119_inscricao_atomica.sql`; ela não foi aplicada e a rota ainda não a utiliza. A aplicação depende de aprovação e conferência das policies RLS antes da integração.
+
+## Adendo — módulos de Times, Arsenal e resultados (20/11/2026)
+
+Esta etapa acrescentou páginas/APIs reais para Times e Arsenal, uma calculadora Elo proposta, uma máquina de estados de resultados, endpoints de agenda/resultado e quatro propostas de migração PostgreSQL. **Nenhum SQL foi executado e o Supabase remoto não foi acessado.** As páginas e rotas novas não devem ser consideradas integradas até as respectivas migrações serem validadas e aprovadas.
+
+- Times: a API deriva o líder e o ator de `req.usuario`; a proposta SQL inclui RLS, funções transacionais para operações sensíveis, lock de capacidade e histórico de memberships. O limite de cinco é apenas proposta. A participação simultânea em mais de um time fica permitida no desenho atual, aguardando decisão.
+- Arsenal: removeu o catálogo demonstrativo e agora apresenta somente registros publicados. A página tem busca, filtro de categoria e detalhes; sem itens publicados, mostra estado vazio.
+- Elo/IVI: calculadora pura foi implementada e testada. Rating 1000, K=32 e escala 400 são valores não aprovados; nenhuma pontuação é gravada e o ranking existente permanece inalterado.
+- Partidas: o histórico anterior continua. APIs novas preveem agendamento pelo criador, relato por participante, confirmação pelo adversário e estado `disputada` em caso de divergência. Migração proposta impede escrita direta relevante e grava estatísticas uma vez na confirmação; cálculo IVI continua desativado. Criação de partidas e arbitragem/resolução de divergências não foram implementadas.
+- Inscrições: foi preparada uma migração separada com trigger transacional e índice parcial para inscrição ativa, preservando inscrições canceladas. A aplicação ainda faz uma pré-contagem para UX, mas a proteção real depende da migração. A RPC antiga segue sem uso.
+- Integração com jogo: documentado desenho server-to-server sem credenciais Supabase no cliente do jogo; endpoint, credencial e fluxo automatizado ainda não existem.
+
+As propostas estão em `database/migrations/20261120_proposta_times.sql`, `database/migrations/20261120_proposta_arsenal.sql`, `database/migrations/20261120_proposta_inscricao_atomica_reinscricao.sql` e `database/migrations/20261120_proposta_partidas_resultados_ivi.sql`. As dependências, grants, policies, reversão e critérios de validação estão descritos em [PLANO_FUNCIONALIDADES_PENDENTES.md](./PLANO_FUNCIONALIDADES_PENDENTES.md).
+
+**Validação desta etapa:** `npm test` passou com 50/50 testes; a verificação de sintaxe passou em 38 arquivos JavaScript e a verificação estática confirmou links, arquivos e IDs nas 8 páginas HTML. `npm ls --depth=0`, sincronização do `package.json` com o `package-lock.json` e `git diff --check HEAD` também passaram. Os testes de API usam Supabase simulado: não comprovam policies, triggers, locks concorrentes nem o schema real. Não houve acesso ao Supabase nem execução de SQL.

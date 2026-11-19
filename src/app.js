@@ -4,16 +4,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
 
+const { criarClienteSupabase } = require('./config/supabase');
 const { criarAuth } = require('./middlewares/auth');
 const { cabecalhosSeguranca } = require('./middlewares/seguranca');
 const { criarRotasApi } = require('./routes');
-
-// Erros do MySQL que significam "banco fora do ar" ou "estrutura do banco desatualizada".
-const BANCO_INDISPONIVEL = new Set([
-  'ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT',
-  'PROTOCOL_CONNECTION_LOST', 'ER_ACCESS_DENIED_ERROR', 'ER_BAD_DB_ERROR'
-]);
-const BANCO_DESATUALIZADO = new Set(['ER_NO_SUCH_TABLE', 'ER_BAD_FIELD_ERROR']);
 
 const FONTES_TITULOS = [
   ['PhoenixGaming.woff2', 'woff2'],
@@ -23,12 +17,11 @@ const FONTES_TITULOS = [
 ];
 
 /**
- * Cria o aplicativo Express. Recebe o banco (pool) e a configuração,
- * o que permite testar a aplicação inteira sem MySQL.
+ * Recebe a fábrica do cliente para que a aplicação possa ser testada sem Supabase.
  */
-function criarApp({ db, config }) {
+function criarApp({ config, criarCliente = (accessToken) => criarClienteSupabase(config, accessToken) }) {
   const app = express();
-  const auth = criarAuth(config);
+  const auth = criarAuth(config, criarCliente);
   const pasta = config.pastaPublica;
   // "root" evita que o Express recuse (404) o arquivo quando o projeto está dentro de uma pasta oculta (nome iniciado por ".").
   const enviarPagina = (res, arquivo, status = 200) => res.status(status).sendFile(arquivo, { root: pasta });
@@ -40,7 +33,7 @@ function criarApp({ db, config }) {
   app.use(express.json({ limit: '20kb' }));
 
   // ---- API ----
-  app.use('/api', criarRotasApi({ db, config, auth }));
+  app.use('/api', criarRotasApi({ config, auth, criarCliente }));
 
   // ---- Arquivos públicos (necessários para a tela de acesso) ----
   // A fonte Phoenix Gaming é opcional: o CSS dela só é gerado se o arquivo existir em public/fonts.
@@ -63,16 +56,20 @@ function criarApp({ db, config }) {
     res.status(404).type('text/plain').send('Arquivo não encontrado.');
   });
 
-  app.get(['/acesso.html', '/acesso', '/login'], (req, res) => {
-    if (auth.sessaoValida(req)) return res.redirect('/');
-    return enviarPagina(res, 'acesso.html');
+  app.get(['/acesso.html', '/acesso', '/login'], (req, res, next) => {
+    auth.sessaoValida(req, res).then((valida) => {
+      if (valida) return res.redirect('/');
+      return enviarPagina(res, 'acesso.html');
+    }).catch(next);
   });
 
   // ---- Área protegida: tudo abaixo exige sessão ----
   app.use((req, res, next) => {
-    if (!auth.sessaoValida(req)) return res.redirect('/acesso.html');
-    res.set('Cache-Control', 'no-store');
-    return next();
+    auth.sessaoValida(req, res).then((valida) => {
+      if (!valida) return res.redirect('/acesso.html');
+      res.set('Cache-Control', 'no-store');
+      return next();
+    }).catch(next);
   });
 
   app.get(['/', '/central.html', '/index.html'], (req, res) => enviarPagina(res, 'index.html'));
@@ -99,17 +96,26 @@ function criarApp({ db, config }) {
     } else if (erro.type === 'entity.too.large') {
       status = 413;
       mensagem = 'Requisição grande demais.';
-    } else if (BANCO_DESATUALIZADO.has(erro.code)) {
+    } else if (erro.code === '42501' || erro.status === 403) {
+      status = 403;
+      mensagem = 'A operação foi bloqueada pelas políticas de acesso do Supabase.';
+    } else if (['42P01', '42703', '42883', 'PGRST202', 'PGRST205'].includes(erro.code)) {
       status = 503;
-      mensagem = 'A estrutura do banco está desatualizada ou não foi criada. Rode "npm run db:preparar".';
-    } else if (BANCO_INDISPONIVEL.has(erro.code)) {
+      mensagem = 'O schema do Supabase ainda não contém uma estrutura necessária para esta funcionalidade.';
+    } else if (erro.status === 429) {
+      status = 429;
+      mensagem = 'Supabase limitou temporariamente as requisições. Aguarde e tente novamente.';
+    } else if (erro.name === 'AuthRetryableFetchError' ||
+               (erro.name === 'TypeError' && /fetch failed|network/i.test(erro.message || '')) ||
+               (Number.isInteger(erro.status) && erro.status >= 500) ||
+               ['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT'].includes(erro.code)) {
       status = 503;
-      mensagem = 'Banco de dados indisponível. Confira o arquivo .env e se o MySQL está em execução.';
+      mensagem = 'Supabase indisponível. Confira a conexão e as variáveis de ambiente.';
     } else {
-      console.error(`Erro em ${req.method} ${req.path}:`, erro.code || erro.message);
+      console.error(`Erro em ${req.method} ${req.path}:`, erro.code || erro.message || erro.name || 'erro desconhecido');
     }
 
-    if (status === 503) console.error(`Banco: ${erro.code || ''} ${erro.message}`);
+    if (status === 503) console.error(`Supabase: ${erro.code || erro.name || 'erro de conexão'}`);
 
     if (req.path.startsWith('/api')) return res.status(status).json({ mensagem });
     return res.status(status).type('text/plain').send(mensagem);

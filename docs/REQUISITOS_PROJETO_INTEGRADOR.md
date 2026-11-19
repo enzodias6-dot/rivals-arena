@@ -23,19 +23,23 @@ Desenvolver uma plataforma web responsiva para a comunidade gamer, com campeonat
 - Frontend HTML, CSS e JavaScript com central, acesso, campeonatos, ranking, perfil, arsenal e times.
 - Backend Node.js + Express.
 - Rotas para cadastro/login, perfil, ranking, torneios, inscrições e desafios.
-- Persistência atual configurada para MySQL.
-- Scripts SQL, preparação do banco, verificações e testes automatizados.
+- Integração da aplicação com Supabase Auth/PostgreSQL.
+- Scripts SQL e preparação MySQL legados, verificações e testes automatizados.
 
 ## Situação conhecida e pontos pendentes
 
-- O código-fonte deste pacote ainda utiliza MySQL. A migração para Supabase foi escolhida como direção do projeto, mas não está implementada aqui.
-- A página Times e o Arsenal ainda possuem conteúdo demonstrativo/fixo, conforme descrito no relatório técnico existente.
-- Não há painel administrativo completo para CRUD de todas as entidades.
-- A documentação OpenAPI/Swagger ainda precisa ser criada.
-- Regras de pontuação e atualização automática de resultados precisam ser definidas pela equipe antes de serem implementadas.
-- A integração real com MySQL precisa ser validada no ambiente de execução do projeto.
-- O documento EP 190 - RIVALS ARENA - Jogos descreve um projeto separado de jogo temático (GDD e publicação, por exemplo); este pacote é o site/plataforma web e não inclui um jogo completo.
+- O backend usa Supabase Auth e PostgREST com o token da sessão do jogador. O cadastro pressupõe o trigger existente que cria `usuarios`; a existência e as permissões devem ser confirmadas no projeto real.
+- Ranking e perfil exibem valores armazenados (`pontos`, `vitorias`, `derrotas`). Foi adicionada uma calculadora Elo isolada, com parâmetros propostos (rating 1000, K=32, escala 400), mas não é uma fórmula aprovada e não atualiza banco ou ranking.
+- Campeonatos, inscrições, cancelamentos e histórico permanecem integrados. Uma migração PostgreSQL prepara controle atômico de vagas e reinscrição com histórico; não foi executada. A constraint remota ainda precisa ser conferida.
+- Times tem agora rotas e interface para criar/editar, solicitar/aprovar membros, sair/remover e transferir liderança. Depende de migração SQL proposta, ainda não aplicada, e das políticas/grants compatíveis. O limite de cinco e a participação em múltiplos times são decisões pendentes.
+- Arsenal passou a consumir um catálogo publicado, com busca/filtro/detalhes e estado vazio sem inventar itens. A tabela proposta não foi criada e ainda depende de conteúdo real da equipe.
+- A leitura histórica de partidas foi preservada. Foram preparadas APIs e UI para agendamento, relato, confirmação e contestação, com funções SQL propostas; não são funcionais contra Supabase até que a migração seja aprovada e aplicada. A criação de partidas e a resolução administrativa de divergências seguem pendentes.
+- O estado atual das policies RLS, grants, constraints e definição das views não está versionado. Os testes automatizados simulam PostgREST/Auth, portanto não comprovam a integração real.
+- As migrações novas são PostgreSQL propostas, distintas do schema MySQL legado. Nenhuma SQL foi executada nem banco remoto alterado.
+- Permanecem pendentes painel administrativo, documentação OpenAPI/Swagger, decisão da fórmula IVI e autenticação server-to-server para a futura integração com o jogo. O jogo não está incluído neste pacote.
+
+O inventário, as propostas de regra, detalhes de migração, fluxo de jogo, reversão e critérios de validação estão em [PLANO_FUNCIONALIDADES_PENDENTES.md](./PLANO_FUNCIONALIDADES_PENDENTES.md).
 
 ## Próxima etapa técnica
 
-Antes de alterar o banco, revisar o esquema Supabase já criado e suas políticas RLS. Depois, migrar autenticação e rotas preservando os contratos usados pelo frontend. Não executar `npm run db:preparar` para preparar o Supabase: esse script é exclusivo do MySQL atual.
+Em ambiente de homologação, confirmar DDL/constraints/RLS/grants, aprovar e revisar cada migração proposta, validar concorrência e fluxo de resultado com contas reais controladas e cadastrar dados reais de Arsenal. Configurar somente `SUPABASE_URL` e uma chave anon/publicável para o site, além das variáveis de execução exigidas pela hospedagem. O preparador `npm run db:preparar` é exclusivo do MySQL legado e não deve ser usado para criar Supabase.

@@ -13,7 +13,7 @@
   const cabecalhos = Array.from(document.querySelectorAll('.rank-table th[data-campo]'));
   const chips = Array.from(document.querySelectorAll('[data-limite]'));
 
-  const estado = { lista: [], campo: 'posicao', direcao: 1, limite: 0, meuNome: null };
+  const estado = { lista: [], campo: 'posicao', direcao: 1, limite: 0, meuId: null };
 
   const aproveitamento = (jogador) => {
     const total = jogador.vitorias + jogador.derrotas;
@@ -30,7 +30,7 @@
   }
 
   function criarLinha(jogador) {
-    const souEu = jogador.nome === estado.meuNome;
+    const souEu = jogador.id === estado.meuId;
     const linha = criarElemento('tr', souEu ? 'is-me' : '');
     const nome = criarElemento('td', '', jogador.nome);
     if (souEu) nome.append(criarElemento('span', 'badge-me', 'Você'));
@@ -113,7 +113,7 @@
     setTimeout(() => alvo.classList.remove('flash'), 1600);
   });
 
-  const usuarioPronto = obterUsuario().then((usuario) => { estado.meuNome = usuario.nome; }).catch(() => {});
+  const usuarioPronto = obterUsuario().then((usuario) => { estado.meuId = usuario.id; }).catch(() => {});
 
   api('ranking')
     .then(async ({ ranking }) => {
@@ -123,7 +123,7 @@
       }
       await usuarioPronto;
       estado.lista = ranking;
-      botaoMinha.hidden = !ranking.some((jogador) => jogador.nome === estado.meuNome);
+      botaoMinha.hidden = !ranking.some((jogador) => jogador.id === estado.meuId);
       montarPodio();
       renderizar();
     })

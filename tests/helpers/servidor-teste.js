@@ -1,26 +1,47 @@
 'use strict';
 
 /**
- * Sobe o site completo com um banco SQLite em memória (sem MySQL), já com os torneios iniciais.
- * Útil para testar as telas no navegador: node tests/helpers/servidor-teste.js [porta]
+ * Sobe a aplicação com um Supabase em memória para revisar a interface sem credenciais reais.
+ * Uso: node tests/helpers/servidor-teste.js [porta]
  */
+const { randomUUID } = require('node:crypto');
 const { carregarConfig } = require('../../src/config/env');
 const { criarApp } = require('../../src/app');
-const { criarBancoSqlite } = require('./bancoSqlite');
+const { criarSupabaseFake } = require('./supabaseFake');
 
 const porta = Number(process.argv[2]) || 3100;
-const db = criarBancoSqlite();
+const supabase = criarSupabaseFake();
 const config = {
   ...carregarConfig({}),
-  jwtSecret: 'segredo-somente-para-testes-0123456789-abcdefghij',
-  bcryptRounds: 4
+  supabaseUrl: 'https://rivals-arena.test.supabase.co',
+  supabaseAnonKey: 'sb_publishable_fake-key-for-local-ui',
+  limites: {
+    login: { janelaMs: 60000, max: 1000 },
+    cadastro: { janelaMs: 60000, max: 1000 },
+    desafios: { janelaMs: 60000, max: 1000 }
+  }
 };
 
-db.bruto.exec(`
-  INSERT INTO torneios (nome, descricao, formato, vagas, inicio, premiacao, status) VALUES
-   ('Rivals Solo Open', 'O torneio principal para jogadores que querem conquistar seu lugar na arena.', 'eliminação simples', 16, '2026-11-02', 'pontos no ranking', 'aberto'),
-   ('Zombie Trials 1V1', 'Uma disputa rápida para testar habilidade, estratégia e consistência.', 'eliminação simples', 8, '2026-11-05', 'destaque no perfil', 'aberto'),
-   ('Arena Night Clash', 'Uma nova chave individual será aberta quando as inscrições forem liberadas.', 'eliminação simples', 32, NULL, NULL, 'em_breve');
-`);
+supabase.seed('campeonatos', {
+  id: randomUUID(),
+  nome: 'Rivals Solo Open',
+  descricao: 'O torneio principal para jogadores que querem conquistar seu lugar na arena.',
+  formato: 'eliminação simples',
+  max_participantes: 16,
+  inicio_em: '2026-12-02',
+  premio: 'pontos no ranking',
+  status: 'aberto'
+});
+supabase.seed('campeonatos', {
+  id: randomUUID(),
+  nome: 'Arena Night Clash',
+  descricao: 'Uma nova chave individual será aberta quando as inscrições forem liberadas.',
+  formato: 'eliminação simples',
+  max_participantes: 32,
+  inicio_em: null,
+  premio: null,
+  status: 'em_breve'
+});
 
-criarApp({ db, config }).listen(porta, () => console.log(`Servidor de teste em http://localhost:${porta}`));
+criarApp({ config, criarCliente: supabase.criarCliente })
+  .listen(porta, () => console.log(`Servidor de teste em http://localhost:${porta}`));

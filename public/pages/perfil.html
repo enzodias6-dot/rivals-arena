@@ -22,6 +22,19 @@
     <section class="section page-content">
       <div class="profile-panel" id="profile">
         <p class="meta">Carregando Perfil...</p>
+        <button class="button-secondary compact" type="button" id="edit-profile-name" hidden>Editar nome</button>
+        <form class="profile-edit-form" id="profile-name-form" hidden>
+          <div class="profile-edit-field">
+            <label for="profile-name-input">Nome de exibição</label>
+            <input class="search-input" id="profile-name-input" name="nome" type="text" autocomplete="nickname" minlength="2" maxlength="80" required aria-describedby="profile-name-feedback">
+          </div>
+          <div class="profile-edit-actions">
+            <button class="button-secondary" type="button" id="cancel-profile-name">Cancelar</button>
+            <button class="button-primary compact" type="submit" id="save-profile-name">Salvar nome</button>
+          </div>
+        </form>
+        <p class="meta profile-name-feedback" id="profile-name-feedback" role="status" aria-live="polite" hidden></p>
+        <div class="profile-stats" id="profile-stats" hidden></div>
       </div>
     </section>
   </main>

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#080a0f">
-  <meta name="description" content="Equipamentos disponíveis na Rivals Arena.">
+  <meta name="description" content="Consulte itens publicados no catálogo da Rivals Arena.">
   <title>Arsenal | Rivals Arena</title>
   <link rel="icon" type="image/png" href="../img/logo.png">
   <link rel="stylesheet" href="../css/fonte-titulos.css">
@@ -15,12 +15,22 @@
   <main>
     <section class="page-header">
 
-      <h1>Arsenal Bélico</h1>
-      
+      <h1>Arsenal</h1>
     </section>
 
     <section class="section page-content">
+      <p class="meta" role="note">O catálogo apresenta apenas itens reais publicados no banco. Nenhum item fictício é exibido.</p>
+      <div class="panel arsenal-filters">
+        <label for="arsenal-search">Buscar item</label>
+        <input id="arsenal-search" type="search" autocomplete="off">
+        <label for="arsenal-category">Categoria</label>
+        <select id="arsenal-category">
+          <option value="">Todas</option>
+        </select>
+      </div>
+      <p id="arsenal-status" role="status" aria-live="polite">Carregando catálogo...</p>
       <div class="arsenal" id="arsenal"></div>
+      <article id="arsenal-detail" class="panel" aria-live="polite" hidden></article>
     </section>
   </main>
 

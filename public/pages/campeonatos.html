@@ -26,6 +26,7 @@
         <a href="#torneios">Torneios</a>
         <a href="#desafios">Meus Desafios</a>
         <a href="#ranking-1v1">Ranking 1V1</a>
+        <a href="#partidas">Partidas</a>
         <a href="#historico">Histórico</a>
       </div>
 
@@ -34,10 +35,64 @@
         <h2>PROVE QUE VOCÊ É<br><span>O MELHOR.</span></h2>
        
         <div class="duel-actions">
+          <button class="button-primary" type="button" id="open-create-tournament" aria-expanded="false" aria-controls="create-tournament-panel">Criar campeonato</button>
           <button class="button-primary" type="button" id="open-tournament">Inscrever-se em um Torneio</button>
           <button class="button-secondary" type="button" id="open-challenge">Desafiar jogador</button>
         </div>
       </div>
+
+      <section class="tournament-create" id="create-tournament-panel" aria-labelledby="create-tournament-title" hidden>
+        <h2 id="create-tournament-title">Criar campeonato</h2>
+        <p>Defina as regras e o calendário da próxima competição.</p>
+        <form id="create-tournament-form" class="tournament-create-form">
+          <div class="create-field">
+            <label for="create-name">Nome</label>
+            <input id="create-name" name="nome" type="text" maxlength="150" required>
+          </div>
+          <div class="create-field">
+            <label for="create-modality">Modalidade</label>
+            <select id="create-modality" name="modalidade" required>
+              <option value="1v1">1v1</option>
+              <option value="dupla">Dupla</option>
+              <option value="equipes">Equipes</option>
+              <option value="solo">Solo</option>
+            </select>
+          </div>
+          <div class="create-field create-field-full">
+            <label for="create-description">Descrição</label>
+            <textarea id="create-description" name="descricao" rows="3"></textarea>
+          </div>
+          <div class="create-field">
+            <label for="create-format">Formato</label>
+            <select id="create-format" name="formato" required>
+              <option value="eliminacao_simples">Eliminação simples</option>
+              <option value="grupos">Fase de grupos</option>
+              <option value="pontos">Pontos corridos</option>
+            </select>
+          </div>
+          <div class="create-field">
+            <label for="create-capacity">Número máximo de participantes</label>
+            <input id="create-capacity" name="max_participantes" type="number" min="2" max="64" step="1" value="16" required>
+          </div>
+          <div class="create-field">
+            <label for="create-prize">Premiação</label>
+            <input id="create-prize" name="premio" type="text">
+          </div>
+          <div class="create-field">
+            <label for="create-start">Data de início</label>
+            <input id="create-start" name="inicio_em" type="datetime-local">
+          </div>
+          <div class="create-field">
+            <label for="create-end">Data de encerramento</label>
+            <input id="create-end" name="encerramento_em" type="datetime-local">
+          </div>
+          <p class="form-error create-field-full" id="create-tournament-feedback" role="alert" hidden></p>
+          <div class="create-actions create-field-full">
+            <button class="button-secondary" type="button" id="close-create-tournament">Cancelar</button>
+            <button class="button-primary" type="submit" id="submit-create-tournament">Salvar campeonato</button>
+          </div>
+        </form>
+      </section>
 
       <div class="stats-grid" aria-label="Resumo da arena">
         <article class="stat-card"><small>Torneios Abertos</small><strong id="open-count">—</strong></article>
@@ -83,17 +138,39 @@
         </div>
       </article>
 
+      <div class="section-heading" id="partidas">
+        <div>
+          <h2>Partidas e resultados</h2>
+        </div>
+      </div>
+      <p class="meta" role="note">O envio e a confirmação de resultados dependem da migração proposta e ainda não alteram a pontuação IVI.</p>
+      <div class="history-list" id="match-agenda" aria-live="polite">
+        <p class="empty-state">Carregando partidas...</p>
+      </div>
+
       <div class="section-heading" id="historico">
         <div>
           
-          <h2>Histórico de Partidas</h2>
+          <h2 id="history-title">Histórico de Partidas</h2>
         </div>
       </div>
 
-      <div class="history-list" id="match-history">
-        <p class="empty-state">Carregando Histórico...</p>
+      <div class="chip-group" role="group" aria-label="Categoria do histórico">
+        <button class="chip" type="button" id="history-matches-tab" aria-pressed="true">Partidas</button>
+        <button class="chip" type="button" id="history-registrations-tab" aria-pressed="false">Inscrições</button>
       </div>
 
+      <section id="history-matches-panel" aria-label="Histórico de partidas">
+        <div class="history-list" id="match-history">
+          <p class="empty-state">Carregando Histórico...</p>
+        </div>
+      </section>
+
+      <section id="history-registrations-panel" aria-label="Histórico de inscrições" hidden>
+        <div class="history-list" id="registration-history">
+          <p class="empty-state">Carregando inscrições...</p>
+        </div>
+      </section>
   
   </main>
 
