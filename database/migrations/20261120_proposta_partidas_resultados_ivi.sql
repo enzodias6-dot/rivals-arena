@@ -79,6 +79,16 @@ begin
   select t.typname into v_tipo
     from pg_catalog.pg_attribute as a
     join pg_catalog.pg_type as t on t.oid = a.atttypid
+   where a.attrelid = 'public.usuarios'::regclass
+     and a.attname = 'empates'
+     and not a.attisdropped;
+  if v_tipo is not null and v_tipo not in ('int2', 'int4', 'int8') then
+    raise exception 'public.usuarios.empates, quando existente, deve ser uma coluna inteira.';
+  end if;
+
+  select t.typname into v_tipo
+    from pg_catalog.pg_attribute as a
+    join pg_catalog.pg_type as t on t.oid = a.atttypid
    where a.attrelid = 'public.partidas'::regclass
      and a.attname = 'concluida_em'
      and not a.attisdropped;
