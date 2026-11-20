@@ -723,6 +723,69 @@ footer {
   text-align: center;
 }
 
+.site-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.site-footer p {
+  margin: 0;
+}
+
+.footer-social {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.footer-social a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 15px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel-strong);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+}
+
+.footer-social a:hover {
+  border-color: var(--red);
+  background: rgba(255, 48, 79, 0.1);
+  transform: translateY(-2px);
+}
+
+.game-button {
+  position: relative;
+  z-index: 2;
+  margin-top: 0;
+  margin-bottom: 8px;
+  box-shadow: 0 8px 28px rgba(255, 48, 79, 0.28);
+}
+
+@media (max-width: 480px) {
+  .footer-social {
+    width: 100%;
+  }
+
+  .footer-social a {
+    flex: 1 1 130px;
+    justify-content: center;
+  }
+
+  .game-button {
+    font-size: 11px;
+    padding: 12px 18px;
+  }
+}
+
 .toast {
   position: fixed;
   right: 24px;
