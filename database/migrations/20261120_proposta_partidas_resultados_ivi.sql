@@ -66,16 +66,6 @@ begin
     end if;
   end loop;
 
-  if exists (
-    select 1 from pg_catalog.pg_attribute as a
-     where a.attrelid = 'public.partidas'::regclass
-       and a.attname = 'vencedor_id'
-       and not a.attisdropped
-       and a.attnotnull
-  ) then
-    raise exception 'public.partidas.vencedor_id precisa aceitar NULL para representar empates.';
-  end if;
-
   select t.typname into v_tipo
     from pg_catalog.pg_attribute as a
     join pg_catalog.pg_type as t on t.oid = a.atttypid
@@ -153,8 +143,18 @@ begin
      where schemaname = 'public'
        and tablename = 'partidas'
        and policyname = 'partidas_select_admin_disputadas'
+  ) or exists (
+    select 1 from pg_catalog.pg_policies
+     where schemaname = 'public'
+       and tablename = 'partida_resultados'
+       and policyname = 'partida_resultados_select_admin'
+  ) or exists (
+    select 1 from pg_catalog.pg_policies
+     where schemaname = 'public'
+       and tablename = 'partida_resultado_eventos'
+       and policyname = 'partida_resultado_eventos_select_admin'
   ) then
-    raise exception 'A policy partidas_select_admin_disputadas já existe; compare sua definição.';
+    raise exception 'Uma policy administrativa proposta já existe; compare sua definição.';
   end if;
 
   if exists (
@@ -189,6 +189,9 @@ $preflight$;
 alter table public.partidas
   add column if not exists status text,
   add column if not exists agendada_para timestamptz;
+
+-- NULL em vencedor_id representa empate confirmado.
+alter table public.partidas alter column vencedor_id drop not null;
 
 do $validate_schedule_type$
 declare
@@ -323,6 +326,23 @@ create policy partida_resultado_eventos_select_participantes on public.partida_r
        and (p.jogador_1_id = (select auth.uid()) or p.jogador_2_id = (select auth.uid()))
   ));
 
+create policy partida_resultados_select_admin on public.partida_resultados
+  for select to authenticated
+  using (
+    status = 'disputada'
+    and exists (
+      select 1 from public.usuarios as u
+       where u.id = (select auth.uid()) and u.perfil = 'admin'
+    )
+  );
+
+create policy partida_resultado_eventos_select_admin on public.partida_resultado_eventos
+  for select to authenticated
+  using (exists (
+    select 1 from public.usuarios as u
+     where u.id = (select auth.uid()) and u.perfil = 'admin'
+  ));
+
 create policy partida_empates_select_participantes on public.partida_empates
   for select to authenticated using (
     jogador_id = (select auth.uid()) and exists (
@@ -355,7 +375,6 @@ declare
   v_resposta jsonb;
   v_pontos_jogador_1 numeric;
   v_pontos_jogador_2 numeric;
-  v_vencedor_pelo_placar uuid;
 begin
   if v_ator is null then
     raise exception using errcode = '42501', message = 'authentication_required';
@@ -625,11 +644,6 @@ begin
 
   v_pontos_jogador_1 := split_part(p_resultado, '-', 1)::numeric;
   v_pontos_jogador_2 := split_part(p_resultado, '-', 2)::numeric;
-  v_vencedor_pelo_placar := case
-    when v_pontos_jogador_1 = v_pontos_jogador_2 then null
-    when v_pontos_jogador_1 > v_pontos_jogador_2 then null
-    else null
-  end;
   v_dados := jsonb_build_object(
     'operacao', 'contestar',
     'vencedor_id', p_vencedor_id,
@@ -899,6 +913,7 @@ $function$;
 revoke insert, update, delete, truncate, references, trigger
   on public.partidas, public.usuarios from anon;
 revoke update on public.usuarios from public, anon, authenticated;
+revoke update (perfil) on public.usuarios from public, anon, authenticated;
 grant update (nome) on public.usuarios to authenticated;
 grant select on public.partidas to authenticated;
 
