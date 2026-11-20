@@ -85,6 +85,22 @@ begin
     raise exception 'Um objeto proposto para reinscrição já existe; compare sua definição antes de aplicar.';
   end if;
 
+  if not exists (
+    select 1 from pg_catalog.pg_class
+     where oid = 'public.inscricoes'::regclass and relrowsecurity
+  ) then
+    raise exception 'RLS precisa estar habilitada em public.inscricoes para permitir reinscrição segura.';
+  end if;
+
+  if exists (
+    select 1 from pg_catalog.pg_policies
+     where schemaname = 'public'
+       and tablename = 'inscricoes'
+       and policyname = 'inscricoes_reinscrever_propria_cancelada'
+  ) then
+    raise exception 'A policy inscricoes_reinscrever_propria_cancelada já existe; compare sua definição.';
+  end if;
+
   if exists (
     select 1
       from public.inscricoes
@@ -186,5 +202,39 @@ before insert or update of status, campeonato_id, jogador_id or delete on public
 for each row execute function public.validar_inscricao_e_vagas();
 
 revoke all on function public.validar_inscricao_e_vagas() from public, anon, authenticated;
+
+-- A API só altera status. A policy permite operações do próprio jogador; o trigger
+-- restringe as transições válidas e bloqueia alteração da identidade/data histórica.
+revoke update on public.inscricoes from public, anon, authenticated;
+do $revoke_registration_column_updates$
+declare
+  v_coluna record;
+begin
+  for v_coluna in
+    select a.attname
+      from pg_catalog.pg_attribute as a
+     where a.attrelid = 'public.inscricoes'::regclass
+       and a.attnum > 0
+       and not a.attisdropped
+  loop
+    execute pg_catalog.format(
+      'revoke update (%I) on public.inscricoes from public, anon, authenticated',
+      v_coluna.attname
+    );
+  end loop;
+end
+$revoke_registration_column_updates$;
+grant update (status) on public.inscricoes to authenticated;
+
+create policy inscricoes_reinscrever_propria_cancelada on public.inscricoes
+  for update to authenticated
+  using (
+    jogador_id = (select auth.uid())
+    and status in ('pendente', 'aprovada', 'cancelada')
+  )
+  with check (
+    jogador_id = (select auth.uid())
+    and status in ('pendente', 'aprovada', 'cancelada')
+  );
 
 commit;
