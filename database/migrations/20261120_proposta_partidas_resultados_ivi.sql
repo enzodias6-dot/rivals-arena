@@ -704,11 +704,14 @@ begin
 end
 $function$;
 
--- A API lê partidas diretamente e faz somente a alteração de nome no perfil.
--- Removem-se apenas privilégios DML diretos de anon nestas tabelas; ACLs de PUBLIC
--- e grants existentes de authenticated requerem inventário próprio antes da revisão final.
+-- A API altera somente usuarios.nome. O papel de administrador nunca pode ser
+-- promovido por UPDATE direto de authenticated; a resolução consulta usuarios.perfil
+-- dentro da RPC SECURITY DEFINER. Outras ACLs e policies RLS ainda exigem auditoria
+-- no ambiente antes de aplicar esta proposta.
 revoke insert, update, delete, truncate, references, trigger
   on public.partidas, public.usuarios from anon;
+revoke update on public.usuarios from public, anon, authenticated;
+grant update (nome) on public.usuarios to authenticated;
 grant select on public.partidas to authenticated;
 
 revoke all on function public.submeter_resultado_partida(uuid, uuid, text, uuid) from public, anon;
