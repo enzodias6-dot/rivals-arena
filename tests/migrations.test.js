@@ -54,13 +54,16 @@ test('relatos confirmados são removidos do staging e o histórico IVI referenci
 test('funções de resultados são SECURITY DEFINER com search_path vazio e EXECUTE restrito', () => {
   const funcoes = partidas.split(/create function public\./i).slice(1);
   const funcoesResultado = funcoes.filter((trecho) =>
-    /^(submeter_resultado_partida|confirmar_resultado_partida|contestar_resultado_partida|agendar_partida)/i.test(trecho)
+    /^(submeter_resultado_partida|confirmar_resultado_partida|contestar_resultado_partida|resolver_resultado_partida|agendar_partida)/i.test(trecho)
   );
-  assert.equal(funcoesResultado.length, 4);
+  assert.equal(funcoesResultado.length, 5);
   for (const funcao of funcoesResultado) {
     assert.match(funcao, /security definer/i);
     assert.match(funcao, /set search_path = ''/i);
   }
   assert.match(partidas, /revoke all on function public\.submeter_resultado_partida\(uuid, uuid, text, uuid\) from public, anon/i);
   assert.match(partidas, /grant execute on function public\.confirmar_resultado_partida\(uuid, uuid\) to authenticated/i);
+  assert.match(partidas, /grant execute on function public\.resolver_resultado_partida\(uuid, uuid, text, text, uuid\) to authenticated/i);
+  assert.match(partidas, /v_perfil is distinct from 'admin'/i);
+  assert.match(partidas, /'resolvido_admin'/i);
 });
