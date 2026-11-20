@@ -634,7 +634,7 @@ begin
      or (v_ator <> v_partida.jogador_1_id and v_ator <> v_partida.jogador_2_id) then
     raise exception using errcode = '42501', message = 'opponent_contest_required';
   end if;
-  if v_resultado.vencedor_id = p_vencedor_id and v_resultado.resultado = p_resultado then
+  if v_resultado.vencedor_id is not distinct from p_vencedor_id and v_resultado.resultado = p_resultado then
     raise exception using errcode = 'P0001', message = 'result_not_divergent';
   end if;
 
@@ -841,8 +841,7 @@ commit;
   v_pontos_jogador_1 := split_part(p_resultado, '-', 1)::numeric;
   v_pontos_jogador_2 := split_part(p_resultado, '-', 2)::numeric;
   if (v_pontos_jogador_1 = v_pontos_jogador_2 and p_vencedor_id is not null)
-     or (v_pontos_jogador_1 > v_pontos_jogador_2 and p_vencedor_id is distinct from null)
-     or (v_pontos_jogador_1 < v_pontos_jogador_2 and p_vencedor_id is null) then
+     or (v_pontos_jogador_1 <> v_pontos_jogador_2 and p_vencedor_id is null) then
     raise exception using errcode = '22023', message = 'score_winner_mismatch';
   end if;
   v_dados := jsonb_build_object(
