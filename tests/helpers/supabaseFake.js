@@ -445,7 +445,7 @@ function criarSupabaseFake({
             ![partida.jogador_1_id, partida.jogador_2_id].includes(dados.vencedor_id)) {
           return Promise.resolve(falha('22023', 'winner_must_be_participant'));
         }
-        const [pontosJogador1, pontosJogador2] = dados.resultado.split('-').map(Number);
+        const [pontosJogador1, pontosJogador2] = dados.resultado.split('-').map(BigInt);
         const vencedorPeloPlacar = pontosJogador1 === pontosJogador2
           ? null
           : pontosJogador1 > pontosJogador2 ? partida.jogador_1_id : partida.jogador_2_id;
@@ -599,7 +599,15 @@ function criarSupabaseFake({
               !isDeepStrictEqual(eventoExistente.dados, dados)) {
             return Promise.resolve(falha('23505', 'idempotency_key_reused', 409));
           }
-          return Promise.resolve({ data: resultadoAtual(partidaId), error: null });
+          const partidaConcluida = resultadoAtual(partidaId);
+          return Promise.resolve({
+            data: {
+              ...partidaConcluida,
+              resolvido_por: usuarioId,
+              justificativa: dados.justificativa
+            },
+            error: null
+          });
         }
         const partida = tabelas.partidas.find((item) => item.id === partidaId);
         const resultado = tabelas.partida_resultados.find((item) => item.partida_id === partidaId);
@@ -616,7 +624,7 @@ function criarSupabaseFake({
             ![partida.jogador_1_id, partida.jogador_2_id].includes(parametros.p_vencedor_id)) {
           return Promise.resolve(falha('22023', 'winner_must_be_participant'));
         }
-        const [p1, p2] = parametros.p_resultado.split('-').map(Number);
+        const [p1, p2] = parametros.p_resultado.split('-').map(BigInt);
         const vencedorPlacar = p1 === p2 ? null : p1 > p2 ? partida.jogador_1_id : partida.jogador_2_id;
         if (vencedorPlacar !== parametros.p_vencedor_id) {
           return Promise.resolve(falha('22023', 'score_winner_mismatch'));
@@ -648,6 +656,15 @@ function criarSupabaseFake({
           partidaId,
           acao: 'resolvido_admin',
           dados
+        });
+        tabelas.partida_resultado_eventos.push({
+          id: randomUUID(),
+          partida_id: partidaId,
+          ator_id: usuarioId,
+          chave_idempotencia: chave,
+          acao: 'resolvido_admin',
+          dados: { ...dados },
+          criado_em: new Date().toISOString()
         });
         const resposta = resultadoAtual(partidaId);
         return Promise.resolve({
