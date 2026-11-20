@@ -422,9 +422,14 @@ test('perfil e ranking usam a view pública de ranking e mantêm a ordenação e
     'derrotas', 'id', 'nome', 'pontos', 'posicao', 'vitorias'
   ]);
 
+  amb.supabase.seed('partida_empates', {
+    partida_id: UUID(),
+    jogador_id: ana.id
+  });
   const perfil = await amb.chamar('GET', '/api/perfil', { cookie: ana.cookie });
   assert.equal(perfil.status, 200);
   assert.equal(perfil.json.usuario.posicao, 3);
+  assert.equal(perfil.json.usuario.empates, 1);
   assert.equal(perfil.json.usuario.nome, 'Ana');
   assert.equal(perfil.json.usuario.email, ana.email);
   assert.equal(perfil.json.usuario.perfil, 'jogador');
