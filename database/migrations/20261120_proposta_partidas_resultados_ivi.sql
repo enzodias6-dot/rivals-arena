@@ -619,26 +619,55 @@ begin
   end if;
   if p_chave_idempotencia is null or p_resultado is null
      or length(p_resultado) > 63
-     or p_resultado !~ '^[0-9]{1,31}-[0-9]{1,31}
+     or p_resultado !~ '^[0-9]{1,31}-[0-9]{1,31}$' then
+    raise exception using errcode = '22023', message = 'invalid_result_payload';
+  end if;
+
+  v_pontos_jogador_1 := split_part(p_resultado, '-', 1)::numeric;
+  v_pontos_jogador_2 := split_part(p_resultado, '-', 2)::numeric;
+  v_vencedor_pelo_placar := case
+    when v_pontos_jogador_1 = v_pontos_jogador_2 then null
+    when v_pontos_jogador_1 > v_pontos_jogador_2 then null
+    else null
+  end;
+  v_dados := jsonb_build_object(
+    'operacao', 'contestar',
+    'vencedor_id', p_vencedor_id,
+    'resultado', p_resultado
+  );
+
+  if (v_pontos_jogador_1 = v_pontos_jogador_2 and p_vencedor_id is not null)
+     or (v_pontos_jogador_1 > v_pontos_jogador_2 and p_vencedor_id is null)
+     or (v_pontos_jogador_1 < v_pontos_jogador_2 and p_vencedor_id is null) then
+    raise exception using errcode = '22023', message = 'score_winner_mismatch';
+  end if;
 
   perform pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(p_chave_idempotencia::text, 1)
   );
-  select * into v_evento from public.partida_resultado_eventos
+  select * into v_evento
+    from public.partida_resultado_eventos
    where chave_idempotencia = p_chave_idempotencia;
   if found then
-    if v_evento.ator_id <> v_ator or v_evento.partida_id <> p_partida_id
-       or v_evento.acao <> 'contestado' or v_evento.dados <> v_dados then
+    if v_evento.ator_id <> v_ator
+       or v_evento.partida_id <> p_partida_id
+       or v_evento.acao <> 'contestado'
+       or v_evento.dados <> v_dados then
       raise exception using errcode = '23505', message = 'idempotency_key_reused';
     end if;
-    select * into v_resultado from public.partida_resultados where partida_id = p_partida_id;
+    select * into v_resultado
+      from public.partida_resultados
+     where partida_id = p_partida_id;
     if not found then
       raise exception using errcode = 'P0002', message = 'result_not_found';
     end if;
     return to_jsonb(v_resultado);
   end if;
 
-  select * into v_partida from public.partidas where id = p_partida_id for update;
+  select * into v_partida
+    from public.partidas
+   where id = p_partida_id
+   for update;
   if not found then
     raise exception using errcode = 'P0002', message = 'match_not_found';
   end if;
@@ -646,31 +675,41 @@ begin
      or v_partida.jogador_1_id = v_partida.jogador_2_id then
     raise exception using errcode = '22023', message = 'match_participants_invalid';
   end if;
-  if v_partida.status in ('concluida', 'cancelada') or v_partida.concluida_em is not null then
+  if v_ator <> v_partida.jogador_1_id and v_ator <> v_partida.jogador_2_id then
+    raise exception using errcode = '42501', message = 'match_participant_required';
+  end if;
+  if v_partida.status in ('concluida', 'cancelada')
+     or v_partida.concluida_em is not null then
     raise exception using errcode = 'P0001', message = 'match_finalized';
   end if;
-  if p_vencedor_id is not null and p_vencedor_id not in (v_partida.jogador_1_id, v_partida.jogador_2_id) then
+  if p_vencedor_id is not null
+     and p_vencedor_id not in (v_partida.jogador_1_id, v_partida.jogador_2_id) then
     raise exception using errcode = '22023', message = 'winner_must_be_participant';
   end if;
-  v_vencedor_pelo_placar := case
-    when v_pontos_jogador_1 = v_pontos_jogador_2 then null
-    when v_pontos_jogador_1 > v_pontos_jogador_2 then v_partida.jogador_1_id
-    else v_partida.jogador_2_id
-  end;
-  if p_vencedor_id is distinct from v_vencedor_pelo_placar then
+
+  if v_pontos_jogador_1 = v_pontos_jogador_2 then
+    if p_vencedor_id is not null then
+      raise exception using errcode = '22023', message = 'score_winner_mismatch';
+    end if;
+  elsif (v_pontos_jogador_1 > v_pontos_jogador_2
+         and p_vencedor_id is distinct from v_partida.jogador_1_id)
+     or (v_pontos_jogador_1 < v_pontos_jogador_2
+         and p_vencedor_id is distinct from v_partida.jogador_2_id) then
     raise exception using errcode = '22023', message = 'score_winner_mismatch';
   end if;
 
-  select * into v_resultado from public.partida_resultados
-   where partida_id = p_partida_id for update;
+  select * into v_resultado
+    from public.partida_resultados
+   where partida_id = p_partida_id
+   for update;
   if not found or v_resultado.status <> 'aguardando_confirmacao' then
     raise exception using errcode = 'P0001', message = 'result_not_open_for_contest';
   end if;
-  if v_ator = v_resultado.reportado_por
-     or (v_ator <> v_partida.jogador_1_id and v_ator <> v_partida.jogador_2_id) then
+  if v_ator = v_resultado.reportado_por then
     raise exception using errcode = '42501', message = 'opponent_contest_required';
   end if;
-  if v_resultado.vencedor_id is not distinct from p_vencedor_id and v_resultado.resultado = p_resultado then
+  if v_resultado.vencedor_id is not distinct from p_vencedor_id
+     and v_resultado.resultado = p_resultado then
     raise exception using errcode = 'P0001', message = 'result_not_divergent';
   end if;
 
@@ -680,11 +719,15 @@ begin
          vencedor_contestado_id = p_vencedor_id,
          resultado_contestado = p_resultado,
          atualizado_em = now()
-   where partida_id = p_partida_id returning * into v_resultado;
+   where partida_id = p_partida_id
+  returning * into v_resultado;
   update public.partidas set status = 'disputada' where id = p_partida_id;
+
   insert into public.partida_resultado_eventos (
     partida_id, ator_id, chave_idempotencia, acao, dados
-  ) values (p_partida_id, v_ator, p_chave_idempotencia, 'contestado', v_dados);
+  ) values (
+    p_partida_id, v_ator, p_chave_idempotencia, 'contestado', v_dados
+  );
   return to_jsonb(v_resultado);
 end
 $function$;
