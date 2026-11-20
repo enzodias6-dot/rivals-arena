@@ -49,7 +49,7 @@ test('relatos confirmados são removidos do staging e o histórico IVI referenci
 test('empates exigem confirmação dos dois jogadores e não inventam pontuação', () => {
   assert.match(partidas, /v_pontos_jogador_1 = v_pontos_jogador_2 and p_vencedor_id is not null/i);
   assert.match(partidas, /insert into public\.partida_empates/i);
-  assert.match(partidas, /vencedor_id precisa aceitar NULL para representar empates/i);
+  assert.match(partidas, /alter table public\.partidas alter column vencedor_id drop not null/i);
   assert.match(partidas, /usuarios\.empates, quando existente, deve ser uma coluna inteira/i);
   assert.match(partidas, /v_resultado\.vencedor_id is null/i);
   assert.match(partidas, /v_resultado\.vencedor_id is not distinct from p_vencedor_id/i);
@@ -60,6 +60,9 @@ test('empates exigem confirmação dos dois jogadores e não inventam pontuaçã
 test('papel admin não pode ser alterado diretamente por usuários autenticados', () => {
   assert.match(partidas, /revoke update on public\.usuarios from public, anon, authenticated/i);
   assert.match(partidas, /grant update \(nome\) on public\.usuarios to authenticated/i);
+  assert.match(partidas, /revoke update \(%I\) on public\.usuarios from public, anon, authenticated/i);
+  assert.match(partidas, /create policy partida_resultados_select_admin/i);
+  assert.match(partidas, /create policy partida_resultado_eventos_select_admin/i);
   assert.match(partidas, /select u\.perfil into v_perfil/i);
   assert.match(partidas, /v_perfil is distinct from 'admin'/i);
 });
