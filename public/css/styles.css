@@ -1408,3 +1408,158 @@ html {
     padding: 12px 10px;
   }
 }
+
+
+/* ---------- Arsenal: seleção de armas no estilo do jogo ---------- */
+.arsenal-game {
+  width: min(100% - 48px, 1120px);
+  min-height: calc(100vh - var(--altura-menu));
+  margin: 0 auto;
+  padding: 28px 0 22px;
+  display: flex;
+  flex-direction: column;
+}
+.arsenal-game-heading { margin-bottom: 24px; }
+.arsenal-kicker {
+  margin: 0 0 5px;
+  color: #aab4c5;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+.arsenal-game-heading h1 {
+  margin: 0;
+  font-family: var(--fonte-titulo);
+  font-size: clamp(28px, 4vw, 48px);
+  line-height: 1;
+  letter-spacing: -.8px;
+}
+.arsenal-game-heading h1 span { color: #2e73ff; }
+.arsenal-game-heading > p:last-child {
+  margin: 8px 0 0;
+  color: #aab1bd;
+  font-size: 12px;
+}
+.arsenal-game-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.arsenal-weapon-card {
+  min-width: 0;
+  overflow: hidden;
+  padding: 16px 16px 13px;
+  background: linear-gradient(180deg, #191b1d 0 25%, #111416 25% 100%);
+  border: 1px solid rgba(255,255,255,.055);
+  box-shadow: 0 14px 35px rgba(0,0,0,.24);
+  transition: transform .2s ease, border-color .2s ease;
+}
+.arsenal-weapon-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(48,112,255,.55);
+}
+.arsenal-card-topline {
+  height: 3px;
+  width: 30px;
+  margin-bottom: 8px;
+  background: #3478ff;
+}
+.arsenal-card-title {
+  margin: 0;
+  font-family: var(--fonte-titulo);
+  font-size: 18px;
+  line-height: 1.1;
+  letter-spacing: .3px;
+}
+.arsenal-card-subtitle {
+  min-height: 24px;
+  margin: 5px 0 10px;
+  color: #929aa5;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.arsenal-weapon-stage {
+  height: 150px;
+  display: grid;
+  place-items: center;
+  background: #090c0f;
+}
+.arsenal-weapon-art {
+  width: 90%;
+  max-height: 125px;
+  filter: drop-shadow(0 8px 8px rgba(0,0,0,.55));
+}
+.arsenal-weapon-stats {
+  display: grid;
+  grid-template-columns: .7fr 1.3fr;
+  gap: 8px;
+  padding-top: 12px;
+}
+.arsenal-stat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  color: #a4abb4;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+.arsenal-stat span { color: #7f8791; }
+.arsenal-stat strong {
+  color: #f1f3f6;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.arsenal-status, .arsenal-empty {
+  grid-column: 1 / -1;
+  color: #aab1bd;
+  font-size: 13px;
+}
+.arsenal-game-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: auto;
+  padding-top: 36px;
+}
+.arsenal-back {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+  min-width: 230px;
+  padding: 9px 12px;
+  border: 1px solid #5e6671;
+  background: rgba(10,13,17,.82);
+  color: #e6e9ee;
+  font-family: var(--fonte-titulo);
+  font-size: 10px;
+  text-decoration: none;
+  transition: border-color .2s ease, background .2s ease;
+}
+.arsenal-back:hover {
+  border-color: #3478ff;
+  background: rgba(52,120,255,.12);
+}
+.arsenal-footnote {
+  color: #68717d;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+}
+.arsenal-site-footer { padding: 12px 7%; font-size: 11px; }
+@media (max-width: 760px) {
+  .arsenal-game { width: min(100% - 28px, 540px); padding-top: 24px; }
+  .arsenal-game-grid { grid-template-columns: 1fr; gap: 12px; }
+  .arsenal-weapon-card { display: grid; grid-template-columns: 1fr 1.15fr; column-gap: 12px; padding: 12px; }
+  .arsenal-card-topline, .arsenal-card-title, .arsenal-card-subtitle { grid-column: 1; }
+  .arsenal-weapon-stage { grid-column: 2; grid-row: 1 / span 3; height: 110px; align-self: center; }
+  .arsenal-weapon-stats { grid-column: 1 / -1; }
+  .arsenal-game-footer { align-items: flex-start; flex-direction: column; padding-top: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .arsenal-weapon-card { transition: none; }
+}
