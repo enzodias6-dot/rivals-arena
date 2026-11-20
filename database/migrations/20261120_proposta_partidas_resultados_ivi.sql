@@ -324,15 +324,16 @@ begin
   if v_ator is null then
     raise exception using errcode = '42501', message = 'authentication_required';
   end if;
-  if p_chave_idempotencia is null or p_vencedor_id is null or p_resultado is null
+  if p_chave_idempotencia is null or p_resultado is null
      or length(p_resultado) > 63
      or p_resultado !~ '^[0-9]{1,31}-[0-9]{1,31}$' then
     raise exception using errcode = '22023', message = 'invalid_result_payload';
   end if;
   v_pontos_jogador_1 := split_part(p_resultado, '-', 1)::numeric;
   v_pontos_jogador_2 := split_part(p_resultado, '-', 2)::numeric;
-  if v_pontos_jogador_1 = v_pontos_jogador_2 then
-    raise exception using errcode = '22023', message = 'draw_not_supported';
+  if (v_pontos_jogador_1 = v_pontos_jogador_2 and p_vencedor_id is not null)
+     or (v_pontos_jogador_1 <> v_pontos_jogador_2 and p_vencedor_id is null) then
+    raise exception using errcode = '22023', message = 'score_winner_mismatch';
   end if;
 
   perform pg_catalog.pg_advisory_xact_lock(
@@ -375,14 +376,15 @@ begin
   if v_ator <> v_partida.jogador_1_id and v_ator <> v_partida.jogador_2_id then
     raise exception using errcode = '42501', message = 'match_participant_required';
   end if;
-  if p_vencedor_id <> v_partida.jogador_1_id and p_vencedor_id <> v_partida.jogador_2_id then
+  if p_vencedor_id is not null and p_vencedor_id <> v_partida.jogador_1_id and p_vencedor_id <> v_partida.jogador_2_id then
     raise exception using errcode = '22023', message = 'winner_must_be_participant';
   end if;
   v_vencedor_pelo_placar := case
+    when v_pontos_jogador_1 = v_pontos_jogador_2 then null
     when v_pontos_jogador_1 > v_pontos_jogador_2 then v_partida.jogador_1_id
     else v_partida.jogador_2_id
   end;
-  if p_vencedor_id <> v_vencedor_pelo_placar then
+  if p_vencedor_id is distinct from v_vencedor_pelo_placar then
     raise exception using errcode = '22023', message = 'score_winner_mismatch';
   end if;
   if v_partida.status in ('concluida', 'cancelada') or v_partida.concluida_em is not null then
@@ -410,20 +412,26 @@ begin
       raise exception using errcode = 'P0001', message = 'result_not_open_for_submission';
     end if;
 
-    if v_resultado.vencedor_id = p_vencedor_id and v_resultado.resultado = p_resultado then
+    if v_resultado.vencedor_id is not distinct from p_vencedor_id and v_resultado.resultado = p_resultado then
       update public.partidas
          set status = 'concluida',
              vencedor_id = p_vencedor_id,
              resultado = p_resultado,
              concluida_em = now()
        where id = p_partida_id;
-      update public.usuarios
-         set vitorias = coalesce(vitorias, 0) + 1
-       where id = p_vencedor_id;
-      update public.usuarios
-         set derrotas = coalesce(derrotas, 0) + 1
-       where id = case when p_vencedor_id = v_partida.jogador_1_id
-         then v_partida.jogador_2_id else v_partida.jogador_1_id end;
+      if p_vencedor_id is null then
+        insert into public.partida_empates (partida_id, jogador_id)
+        values (p_partida_id, v_partida.jogador_1_id), (p_partida_id, v_partida.jogador_2_id);
+        if exists (select 1 from pg_catalog.pg_attribute where attrelid = 'public.usuarios'::regclass and attname = 'empates' and not attisdropped) then
+          execute 'update public.usuarios set empates = coalesce(empates, 0) + 1 where id in ($1, $2)'
+            using v_partida.jogador_1_id, v_partida.jogador_2_id;
+        end if;
+      else
+        update public.usuarios set vitorias = coalesce(vitorias, 0) + 1 where id = p_vencedor_id;
+        update public.usuarios set derrotas = coalesce(derrotas, 0) + 1
+         where id = case when p_vencedor_id = v_partida.jogador_1_id
+           then v_partida.jogador_2_id else v_partida.jogador_1_id end;
+      end if;
       delete from public.partida_resultados where partida_id = p_partida_id;
       v_acao := 'confirmado';
       v_resposta := jsonb_build_object(
@@ -526,13 +534,19 @@ begin
          resultado = v_resultado.resultado,
          concluida_em = now()
    where id = p_partida_id;
-  update public.usuarios
-     set vitorias = coalesce(vitorias, 0) + 1
-   where id = v_resultado.vencedor_id;
-  update public.usuarios
-     set derrotas = coalesce(derrotas, 0) + 1
-   where id = case when v_resultado.vencedor_id = v_partida.jogador_1_id
-     then v_partida.jogador_2_id else v_partida.jogador_1_id end;
+  if v_resultado.vencedor_id is null then
+    insert into public.partida_empates (partida_id, jogador_id)
+    values (p_partida_id, v_partida.jogador_1_id), (p_partida_id, v_partida.jogador_2_id);
+    if exists (select 1 from pg_catalog.pg_attribute where attrelid = 'public.usuarios'::regclass and attname = 'empates' and not attisdropped) then
+      execute 'update public.usuarios set empates = coalesce(empates, 0) + 1 where id in ($1, $2)'
+        using v_partida.jogador_1_id, v_partida.jogador_2_id;
+    end if;
+  else
+    update public.usuarios set vitorias = coalesce(vitorias, 0) + 1 where id = v_resultado.vencedor_id;
+    update public.usuarios set derrotas = coalesce(derrotas, 0) + 1
+     where id = case when v_resultado.vencedor_id = v_partida.jogador_1_id
+       then v_partida.jogador_2_id else v_partida.jogador_1_id end;
+  end if;
   delete from public.partida_resultados where partida_id = p_partida_id;
   insert into public.partida_resultado_eventos (
     partida_id, ator_id, chave_idempotencia, acao, dados
@@ -606,17 +620,15 @@ begin
   if v_partida.status in ('concluida', 'cancelada') or v_partida.concluida_em is not null then
     raise exception using errcode = 'P0001', message = 'match_finalized';
   end if;
-  if p_vencedor_id <> v_partida.jogador_1_id and p_vencedor_id <> v_partida.jogador_2_id then
+  if p_vencedor_id is not null and p_vencedor_id not in (v_partida.jogador_1_id, v_partida.jogador_2_id) then
     raise exception using errcode = '22023', message = 'winner_must_be_participant';
   end if;
-  if v_pontos_jogador_1 = v_pontos_jogador_2 then
-    raise exception using errcode = '22023', message = 'draw_not_supported';
-  end if;
   v_vencedor_pelo_placar := case
+    when v_pontos_jogador_1 = v_pontos_jogador_2 then null
     when v_pontos_jogador_1 > v_pontos_jogador_2 then v_partida.jogador_1_id
     else v_partida.jogador_2_id
   end;
-  if p_vencedor_id <> v_vencedor_pelo_placar then
+  if p_vencedor_id is distinct from v_vencedor_pelo_placar then
     raise exception using errcode = '22023', message = 'score_winner_mismatch';
   end if;
 
