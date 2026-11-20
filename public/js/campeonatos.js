@@ -326,6 +326,9 @@
       opcao.value = id;
       seletor.append(opcao);
     }
+    const opcaoEmpate = criarElemento('option', '', 'Empate');
+    opcaoEmpate.value = '';
+    seletor.append(opcaoEmpate);
     return seletor;
   }
 
@@ -363,12 +366,53 @@
         return;
       }
       enviarAcaoResultado(caminho, {
-        vencedor_id: vencedor.value,
+        vencedor_id: vencedor.value || null,
         resultado: placar.value.trim(),
         chave_idempotencia: chave
       }).finally(() => { enviar.disabled = false; });
     });
     return formularioResultado;
+  }
+
+  function criarFormularioResolucaoAdmin(partida) {
+    const formulario = criarElemento('form', 'match-result-form');
+    const vencedor = criarSeletorVencedor(partida);
+    const placar = criarElemento('input');
+    placar.type = 'text';
+    placar.maxLength = 63;
+    placar.required = true;
+    placar.placeholder = 'Placar final (ex.: 2-1 ou 1-1)';
+    placar.setAttribute('aria-label', 'Placar definido pelo administrador');
+
+    const justificativa = criarElemento('textarea');
+    justificativa.maxLength = 1000;
+    justificativa.required = true;
+    justificativa.rows = 3;
+    justificativa.placeholder = 'Justifique a decisão administrativa';
+    justificativa.setAttribute('aria-label', 'Justificativa obrigatória da decisão');
+
+    const enviar = criarElemento('button', 'button-primary compact', 'Resolver contestação');
+    enviar.type = 'submit';
+    formulario.append(vencedor, placar, justificativa, enviar);
+    formulario.addEventListener('submit', (evento) => {
+      evento.preventDefault();
+      enviar.disabled = true;
+      let chave;
+      try {
+        chave = criarChaveIdempotencia();
+      } catch (erro) {
+        notificar(erro.message);
+        enviar.disabled = false;
+        return;
+      }
+      enviarAcaoResultado(`partidas/${encodeURIComponent(partida.id)}/resultado/resolver`, {
+        vencedor_id: vencedor.value || null,
+        resultado: placar.value.trim(),
+        justificativa: justificativa.value.trim(),
+        chave_idempotencia: chave
+      }).finally(() => { enviar.disabled = false; });
+    });
+    return formulario;
   }
 
   async function carregarAgendaPartidas() {
@@ -401,11 +445,21 @@
           cartao.append(criarElemento('p', '', `Resultado confirmado. Vencedor: ${vencedor || 'participante'}.`));
           cartao.append(criarElemento('p', 'meta', resultado.resultado || 'Placar indisponível.'));
         } else if (resultado?.status === 'disputada') {
+          const nomeRelator = resultado.reportado_por === partida.jogador_1_id
+            ? partida.jogador1 : partida.jogador2;
+          const nomeContestador = resultado.contestado_por === partida.jogador_1_id
+            ? partida.jogador1 : partida.jogador2;
           cartao.append(
             criarElemento('p', 'form-error', 'Resultado divergente: aguarda resolução autorizada.'),
-            criarElemento('p', 'meta', `Relato: ${resultado.resultado || 'Placar indisponível.'}`),
-            criarElemento('p', 'meta', `Contestação: ${resultado.resultado_contestado || 'Placar indisponível.'}`)
+            criarElemento('p', 'meta', `Relato de ${nomeRelator || 'participante'}: ${resultado.resultado || 'Placar indisponível.'}`),
+            criarElemento('p', 'meta', `Contestação de ${nomeContestador || 'participante'}: ${resultado.resultado_contestado || 'Placar indisponível.'}`)
           );
+          if (estado.usuario?.perfil === 'admin') {
+            cartao.append(
+              criarElemento('p', 'meta', 'Como administrador, escolha um dos relatos ou informe um terceiro resultado. A justificativa ficará registrada no histórico.'),
+              criarFormularioResolucaoAdmin(partida)
+            );
+          }
         } else if (resultado?.status === 'aguardando_confirmacao') {
           cartao.append(
             criarElemento('p', '', `Resultado informado por ${resultado.reportado_por === estado.usuario?.id ? 'você' : 'seu adversário'}; aguarda confirmação.`),
