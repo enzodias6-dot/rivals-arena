@@ -20,6 +20,9 @@ test('reinscrição mantém a UNIQUE global e reutiliza a mesma linha cancelada'
   assert.match(inscricoes, /contype = 'u'/i);
   assert.match(inscricoes, /old\.status = 'cancelada' and new\.status = 'pendente'/i);
   assert.match(inscricoes, /registration_identity_immutable/i);
+  assert.match(inscricoes, /new\.id is distinct from old\.id/i);
+  assert.match(inscricoes, /new\.inscrito_em is distinct from old\.inscrito_em/i);
+  assert.match(inscricoes, /new\.inscrito_em := now\(\)/i);
   assert.match(inscricoes, /pg_advisory_xact_lock/i);
   assert.doesNotMatch(inscricoes, /drop\s+constraint/i);
   assert.doesNotMatch(inscricoes, /drop\s+index/i);
