@@ -18,6 +18,7 @@ const partidas = fs.readFileSync(path.join(
 test('reinscrição mantém a UNIQUE global e reutiliza a mesma linha cancelada', () => {
   assert.match(inscricoes, /inscricoes_campeonato_id_jogador_id_key/i);
   assert.match(inscricoes, /contype = 'u'/i);
+  assert.match(inscricoes, /c\.conkey = array\[/i);
   assert.match(inscricoes, /old\.status = 'cancelada' and new\.status = 'pendente'/i);
   assert.match(inscricoes, /registration_identity_immutable/i);
   assert.match(inscricoes, /new\.id is distinct from old\.id/i);
