@@ -8,7 +8,6 @@
   const formCadastro = $('#register-form');
   const abaLogin = $('#tab-login');
   const abaCadastro = $('#tab-register');
-  const titulo = $('#auth-title');
   const mensagem = $('#auth-message');
 
   function mostrarMensagem(texto, tipo = 'info') {
@@ -31,7 +30,6 @@
     abaCadastro.classList.toggle('active', !login);
     abaLogin.setAttribute('aria-selected', String(login));
     abaCadastro.setAttribute('aria-selected', String(!login));
-    titulo.textContent = login ? 'Entrar na arena' : 'Alistar combatente';
     limparMensagem();
   }
 
@@ -90,22 +88,4 @@
       irParaCentral();
     });
   });
-
-  // Efeito visual decorativo da tela de acesso.
-  const terminal = $('#boot');
-  if (terminal) {
-    const linhas = [
-      'Inicializando conexão com a arena...',
-      'Verificando credenciais de acesso...',
-      'Preparando combatente...'
-    ];
-
-    linhas.forEach((linha, indice) => {
-      window.setTimeout(() => {
-        const item = document.createElement('div');
-        item.textContent = linha;
-        terminal.append(item);
-      }, indice * 600);
-    });
-  }
 })();
