@@ -115,6 +115,7 @@ begin
 
   if to_regclass('public.partida_resultados') is not null
      or to_regclass('public.partida_resultado_eventos') is not null
+     or to_regclass('public.partida_empates') is not null
      or to_regclass('public.ivi_ratings') is not null
      or to_regclass('public.ivi_movimentacoes') is not null then
     raise exception 'Uma ou mais estruturas propostas já existem; compare o DDL antes de aplicar.';
@@ -196,7 +197,7 @@ create index partidas_status_idx on public.partidas (status);
 create table public.partida_resultados (
   partida_id uuid primary key references public.partidas(id) on delete restrict,
   reportado_por uuid not null references public.usuarios(id) on delete restrict,
-  vencedor_id uuid not null references public.usuarios(id) on delete restrict,
+  vencedor_id uuid references public.usuarios(id) on delete restrict,
   resultado text not null check (resultado ~ '^[0-9]{1,31}-[0-9]{1,31}$'),
   status text not null default 'aguardando_confirmacao'
     check (status in ('aguardando_confirmacao', 'disputada')),
@@ -212,8 +213,7 @@ create table public.partida_resultados (
       and contestado_por is null and vencedor_contestado_id is null
       and resultado_contestado is null)
     or (status = 'disputada'
-      and contestado_por is not null and vencedor_contestado_id is not null
-      and resultado_contestado is not null)
+      and contestado_por is not null and resultado_contestado is not null)
   )
 );
 
@@ -231,6 +231,13 @@ create table public.partida_resultado_eventos (
 
 create index partida_resultado_eventos_partida_idx
   on public.partida_resultado_eventos (partida_id, criado_em);
+
+create table public.partida_empates (
+  partida_id uuid not null references public.partidas(id) on delete restrict,
+  jogador_id uuid not null references public.usuarios(id) on delete restrict,
+  criado_em timestamptz not null default now(),
+  primary key (partida_id, jogador_id)
+);
 
 create table public.ivi_ratings (
   jogador_id uuid primary key references public.usuarios(id) on delete restrict,
@@ -256,12 +263,13 @@ create index ivi_movimentacoes_jogador_data_idx
 
 alter table public.partida_resultados enable row level security;
 alter table public.partida_resultado_eventos enable row level security;
+alter table public.partida_empates enable row level security;
 alter table public.ivi_ratings enable row level security;
 alter table public.ivi_movimentacoes enable row level security;
 revoke all on public.partida_resultados, public.partida_resultado_eventos,
-  public.ivi_ratings, public.ivi_movimentacoes from public, anon, authenticated;
+  public.partida_empates, public.ivi_ratings, public.ivi_movimentacoes from public, anon, authenticated;
 grant select on public.partida_resultados, public.partida_resultado_eventos,
-  public.ivi_ratings, public.ivi_movimentacoes to authenticated;
+  public.partida_empates, public.ivi_ratings, public.ivi_movimentacoes to authenticated;
 
 create policy partida_resultados_select_participantes on public.partida_resultados
   for select to authenticated
@@ -278,6 +286,14 @@ create policy partida_resultado_eventos_select_participantes on public.partida_r
      where p.id = partida_resultado_eventos.partida_id
        and (p.jogador_1_id = (select auth.uid()) or p.jogador_2_id = (select auth.uid()))
   ));
+
+create policy partida_empates_select_participantes on public.partida_empates
+  for select to authenticated using (
+    jogador_id = (select auth.uid()) and exists (
+      select 1 from public.partidas as p where p.id = partida_empates.partida_id
+        and (p.jogador_1_id = (select auth.uid()) or p.jogador_2_id = (select auth.uid()))
+    )
+  );
 
 create policy ivi_ratings_select_owner on public.ivi_ratings
   for select to authenticated using (jogador_id = (select auth.uid()));
