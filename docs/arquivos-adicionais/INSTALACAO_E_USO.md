@@ -150,10 +150,12 @@ Nesse caso, acesse [http://localhost:3100](http://localhost:3100). Os dados dess
 
 ## 8. Sobre os arquivos SQL incluídos no repositório
 
-Na pasta `database/` estão disponíveis:
+Para facilitar a entrega, os dois scripts também estão disponíveis nesta pasta:
 
-- [schema.sql](../../database/schema.sql) — cria as tabelas do modelo antigo em **MySQL**.
-- [dados-iniciais.sql](../../database/dados-iniciais.sql) — adiciona alguns torneios de exemplo ao banco MySQL antigo.
+- [schema-mysql-legado.sql](./schema-mysql-legado.sql) — cria as tabelas do modelo antigo em **MySQL**.
+- [dados-iniciais-mysql-legado.sql](./dados-iniciais-mysql-legado.sql) — adiciona torneios de exemplo ao banco MySQL antigo.
+
+Os arquivos originais permanecem em [database/schema.sql](../../database/schema.sql) e [database/dados-iniciais.sql](../../database/dados-iniciais.sql). As cópias desta pasta devem acompanhar os originais caso haja futuras atualizações.
 
 Esses arquivos foram mantidos como parte do histórico técnico do projeto. **Eles não criam o banco PostgreSQL do Supabase utilizado atualmente pela aplicação.** Não execute esses scripts no Supabase: a sintaxe e o modelo são diferentes.
 
