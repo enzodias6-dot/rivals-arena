@@ -141,6 +141,22 @@ begin
     raise exception 'Uma ou mais estruturas propostas já existem; compare o DDL antes de aplicar.';
   end if;
 
+  if not exists (
+    select 1 from pg_catalog.pg_class
+     where oid = 'public.partidas'::regclass and relrowsecurity
+  ) then
+    raise exception 'RLS precisa estar habilitada em public.partidas antes de liberar a fila administrativa.';
+  end if;
+
+  if exists (
+    select 1 from pg_catalog.pg_policies
+     where schemaname = 'public'
+       and tablename = 'partidas'
+       and policyname = 'partidas_select_admin_disputadas'
+  ) then
+    raise exception 'A policy partidas_select_admin_disputadas já existe; compare sua definição.';
+  end if;
+
   if exists (
     select 1 from pg_catalog.pg_constraint
      where conrelid = 'public.partidas'::regclass
@@ -842,6 +858,17 @@ revoke insert, update, delete, truncate, references, trigger
 revoke update on public.usuarios from public, anon, authenticated;
 grant update (nome) on public.usuarios to authenticated;
 grant select on public.partidas to authenticated;
+
+create policy partidas_select_admin_disputadas on public.partidas
+  for select to authenticated
+  using (
+    status = 'disputada'
+    and exists (
+      select 1 from public.usuarios as u
+       where u.id = (select auth.uid())
+         and u.perfil = 'admin'
+    )
+  );
 
 revoke all on function public.submeter_resultado_partida(uuid, uuid, text, uuid) from public, anon;
 revoke all on function public.confirmar_resultado_partida(uuid, uuid) from public, anon;
