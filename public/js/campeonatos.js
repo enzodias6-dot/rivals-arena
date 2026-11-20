@@ -439,10 +439,14 @@
 
         const resultado = partida.resultado;
         if (resultado?.status === 'confirmada') {
-          const vencedor = resultado.vencedor_id === partida.jogador_1_id
-            ? partida.jogador1
-            : partida.jogador2;
-          cartao.append(criarElemento('p', '', `Resultado confirmado. Vencedor: ${vencedor || 'participante'}.`));
+          if (resultado.vencedor_id === null) {
+            cartao.append(criarElemento('p', '', 'Partida confirmada como empate.'));
+          } else {
+            const vencedor = resultado.vencedor_id === partida.jogador_1_id
+              ? partida.jogador1
+              : partida.jogador2;
+            cartao.append(criarElemento('p', '', `Resultado confirmado. Vencedor: ${vencedor || 'participante'}.`));
+          }
           cartao.append(criarElemento('p', 'meta', resultado.resultado || 'Placar indisponível.'));
         } else if (resultado?.status === 'disputada') {
           const nomeRelator = resultado.reportado_por === partida.jogador_1_id
