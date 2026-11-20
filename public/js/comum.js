@@ -98,7 +98,6 @@
     ['index.html', 'Central'],
     ['pages/campeonatos.html', '1V1'],
     ['pages/ranking.html', 'Ranking'],
-    ['pages/arsenal.html', 'Arsenal'],
     ['pages/times.html', 'Times'],
     ['pages/perfil.html', 'Perfil'],
     ['#sair', 'Sair']
