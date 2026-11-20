@@ -1597,6 +1597,18 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
       corpo: { vencedor_id: jogador2.id, resultado: '1-2', chave_idempotencia: UUID() }
     })).status, 200);
 
+    const justificativaAusente = await amb.chamar('POST', `/api/partidas/${partidaId}/resultado/resolver`, {
+      cookie: admin.cookie,
+      corpo: {
+        vencedor_id: null,
+        resultado: '1-1',
+        justificativa: '   ',
+        chave_idempotencia: UUID()
+      }
+    });
+    assert.equal(justificativaAusente.status, 400);
+    assert.equal(amb.supabase.tabelas.partidas[0].status, 'disputada');
+
     const decisao = await amb.chamar('POST', `/api/partidas/${partidaId}/resultado/resolver`, {
       cookie: admin.cookie,
       corpo: {
@@ -1614,6 +1626,12 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
     assert.equal(amb.supabase.tabelas.partida_empates.length, 2);
     assert.equal(amb.supabase.tabelas.partidas[0].vencedor_id, null);
     assert.equal(amb.supabase.tabelas.partidas[0].status, 'concluida');
+    const eventoAdmin = amb.supabase.tabelas.partida_resultado_eventos.find(
+      (item) => item.acao === 'resolvido_admin'
+    );
+    assert.equal(eventoAdmin.ator_id, admin.id);
+    assert.equal(eventoAdmin.dados.resultado, '1-1');
+    assert.match(eventoAdmin.dados.justificativa, /evidências/);
   });
 
   test('resultado divergente fica pendente de resolução e agenda só pode ser alterada pelo organizador', async (t) => {
