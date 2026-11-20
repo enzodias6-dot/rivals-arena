@@ -21,9 +21,9 @@ begin
     into v_colunas
     from pg_catalog.pg_attribute as a
    where a.attrelid = 'public.inscricoes'::regclass
-     and a.attname in ('id', 'campeonato_id', 'jogador_id', 'status')
+     and a.attname in ('id', 'campeonato_id', 'jogador_id', 'status', 'inscrito_em')
      and not a.attisdropped;
-  if v_colunas is distinct from array['campeonato_id', 'id', 'jogador_id', 'status']::text[] then
+  if v_colunas is distinct from array['campeonato_id', 'id', 'inscrito_em', 'jogador_id', 'status']::text[] then
     raise exception 'Confirme as colunas id, campeonato_id, jogador_id e status em public.inscricoes.';
   end if;
 
@@ -33,6 +33,7 @@ begin
       ('inscricoes', 'campeonato_id', 'uuid'),
       ('inscricoes', 'jogador_id', 'uuid'),
       ('inscricoes', 'status', 'string'),
+      ('inscricoes', 'inscrito_em', 'timestamp'),
       ('campeonatos', 'max_participantes', 'integer'),
       ('campeonatos', 'status', 'string')
     ) as esperado(tabela, coluna, tipo)
@@ -45,7 +46,8 @@ begin
     if v_tipo is null
        or (v_coluna.tipo = 'uuid' and v_tipo <> 'uuid')
        or (v_coluna.tipo = 'string' and v_tipo not in ('text', 'varchar', 'bpchar'))
-       or (v_coluna.tipo = 'integer' and v_tipo not in ('int2', 'int4', 'int8')) then
+       or (v_coluna.tipo = 'integer' and v_tipo not in ('int2', 'int4', 'int8'))
+       or (v_coluna.tipo = 'timestamp' and v_tipo not in ('timestamp', 'timestamptz')) then
       raise exception 'Tipo incompatível em public.%.%; interrompendo antes de alterar constraints.', v_coluna.tabela, v_coluna.coluna;
     end if;
   end loop;
@@ -114,13 +116,18 @@ begin
     raise exception using errcode = '42501', message = 'registration_actor_mismatch';
   end if;
 
-  if tg_op = 'UPDATE' and
-     (new.campeonato_id <> old.campeonato_id or new.jogador_id <> old.jogador_id) then
+  if tg_op = 'UPDATE' and (
+       new.id is distinct from old.id
+       or new.campeonato_id is distinct from old.campeonato_id
+       or new.jogador_id is distinct from old.jogador_id
+       or new.inscrito_em is distinct from old.inscrito_em
+     ) then
     raise exception using errcode = '42501', message = 'registration_identity_immutable';
   end if;
 
   if tg_op = 'INSERT' then
     new.status := 'pendente';
+    new.inscrito_em := now();
   elsif tg_op = 'UPDATE' then
     if old.status = 'cancelada' and new.status not in ('cancelada', 'pendente') then
       raise exception using errcode = '42501', message = 'registration_status_transition_forbidden';
