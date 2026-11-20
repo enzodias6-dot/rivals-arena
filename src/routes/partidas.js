@@ -53,7 +53,9 @@ function responderErroPartida(res, error) {
       opponent_confirmation_required: 'Somente o adversário pode confirmar este resultado.',
       opponent_contest_required: 'Somente o adversário pode contestar este resultado.',
       match_not_schedulable: 'A partida não pode ser agendada neste estado.',
-      championship_full: 'A capacidade do campeonato foi atingida.'
+      championship_full: 'A capacidade do campeonato foi atingida.',
+      administrator_required: 'Somente um administrador pode resolver resultados contestados.',
+      result_not_disputed: 'A partida não possui um resultado contestado aguardando decisão.'
     };
     return res.status(409).json({
       mensagem: mensagens[error.message] || 'A operação conflita com o estado atual da partida.'
@@ -179,6 +181,40 @@ function criarRotasPartidas() {
       p_vencedor_id: dados.vencedorId,
       p_resultado: dados.resultado,
       p_chave_idempotencia: dados.chaveIdempotencia
+    });
+  });
+
+  router.post('/partidas/:id/resultado/resolver', async (req, res) => {
+    const partidaId = lerUuid(req.params.id);
+    if (!partidaId) return res.status(400).json({ mensagem: 'Partida inválida.' });
+
+    const corpo = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
+      ? req.body
+      : {};
+    const vencedorId = corpo.vencedor_id === null ? null : lerUuid(corpo.vencedor_id);
+    const resultado = typeof corpo.resultado === 'string' ? corpo.resultado : '';
+    const justificativa = typeof corpo.justificativa === 'string'
+      ? corpo.justificativa.trim()
+      : '';
+    const chaveIdempotencia = lerUuid(corpo.chave_idempotencia);
+
+    if (!vencedorId) return res.status(400).json({ mensagem: 'Informe um vencedor válido para a decisão administrativa.' });
+    if (!/^\d{1,31}-\d{1,31}$/.test(resultado) || resultado.length > 63) {
+      return res.status(400).json({ mensagem: 'Informe o placar no formato 2-1.' });
+    }
+    if (!justificativa || justificativa.length > 1000) {
+      return res.status(400).json({ mensagem: 'A justificativa é obrigatória e deve ter até 1000 caracteres.' });
+    }
+    if (!chaveIdempotencia) {
+      return res.status(400).json({ mensagem: 'Informe uma chave de idempotência UUID.' });
+    }
+
+    return executarRpc(req, res, 'resolver_resultado_partida', {
+      p_partida_id: partidaId,
+      p_vencedor_id: vencedorId,
+      p_resultado: resultado,
+      p_justificativa: justificativa,
+      p_chave_idempotencia: chaveIdempotencia
     });
   });
 
