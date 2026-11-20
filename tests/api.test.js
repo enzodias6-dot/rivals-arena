@@ -1157,6 +1157,24 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
     message: 'Signup disabled'
   });
 
+  const cadastro = await amb.chamar('POST', '/api/usuarios', {
+    corpo: { nome: 'Teste Bloqueado', email: 'bloqueado@teste.com', senha: 'senha-forte-123' }
+  });
+  assert.equal(cadastro.status, 403);
+  assert.doesNotMatch(cadastro.json.mensagem, /políticas de acesso/i);
+
+  amb.supabase.falharAuth('signInWithPassword', {
+    status: 403,
+    code: 'user_banned',
+    message: 'User is banned'
+  });
+  const login = await amb.chamar('POST', '/api/login', {
+    corpo: { email: 'bloqueado@teste.com', senha: 'senha-forte-123' }
+  });
+  assert.equal(login.status, 403);
+  assert.doesNotMatch(login.json.mensagem, /políticas de acesso/i);
+});
+
   test('Times usa a identidade autenticada e oferece solicitação, aprovação, saída e transferência', async (t) => {
     const amb = await criarAmbiente();
     t.after(amb.encerrar);
@@ -1738,20 +1756,4 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
     });
     assert.equal(repetida.status, 200);
   });
-  const cadastro = await amb.chamar('POST', '/api/usuarios', {
-    corpo: { nome: 'Teste Bloqueado', email: 'bloqueado@teste.com', senha: 'senha-forte-123' }
-  });
-  assert.equal(cadastro.status, 403);
-  assert.doesNotMatch(cadastro.json.mensagem, /políticas de acesso/i);
 
-  amb.supabase.falharAuth('signInWithPassword', {
-    status: 403,
-    code: 'user_banned',
-    message: 'User is banned'
-  });
-  const login = await amb.chamar('POST', '/api/login', {
-    corpo: { email: 'bloqueado@teste.com', senha: 'senha-forte-123' }
-  });
-  assert.equal(login.status, 403);
-  assert.doesNotMatch(login.json.mensagem, /políticas de acesso/i);
-});
