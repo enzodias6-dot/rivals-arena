@@ -15,24 +15,15 @@ const partidas = fs.readFileSync(path.join(
   'database/migrations/20261120_proposta_partidas_resultados_ivi.sql'
 ), 'utf8');
 
-test('preflight de reinscrição só troca a constraint UNIQUE conhecida e exata', () => {
-  assert.match(inscricoes, /c\.conname\s*=\s*'inscricoes_campeonato_id_jogador_id_key'/i);
-  assert.match(inscricoes, /c\.contype\s*=\s*'u'/i);
-  assert.match(inscricoes, /v_constraint_attnums\s+is\s+distinct\s+from/i);
-  assert.match(inscricoes, /v_constraints_exatas\s+<>\s*1/i);
-  assert.match(inscricoes, /v_dependencias_fk\s*>\s*0/i);
-  assert.match(inscricoes, /drop constraint inscricoes_campeonato_id_jogador_id_key/i);
-  assert.doesNotMatch(inscricoes, /drop\s+constraint\s+%I/i);
-  assert.doesNotMatch(inscricoes, /\bdrop\s+index\b/i);
-});
-
-test('preflight de reinscrição interrompe diante de índice standalone equivalente', () => {
-  assert.match(inscricoes, /i\.indisunique/i);
-  assert.match(inscricoes, /i\.indpred is null/i);
-  assert.match(inscricoes, /i\.indexprs is null/i);
-  assert.match(inscricoes, /i\.indnkeyatts\s*=\s*2/i);
-  assert.match(inscricoes, /if v_indices_standalone > 0 then\s+raise exception/i);
-  assert.match(inscricoes, /to_regclass\('public\.inscricoes_ativas_campeonato_jogador_uq'\)/i);
+test('reinscrição mantém a UNIQUE global e reutiliza a mesma linha cancelada', () => {
+  assert.match(inscricoes, /inscricoes_campeonato_id_jogador_id_key/i);
+  assert.match(inscricoes, /contype = 'u'/i);
+  assert.match(inscricoes, /old\.status = 'cancelada' and new\.status = 'pendente'/i);
+  assert.match(inscricoes, /registration_identity_immutable/i);
+  assert.match(inscricoes, /pg_advisory_xact_lock/i);
+  assert.doesNotMatch(inscricoes, /drop\s+constraint/i);
+  assert.doesNotMatch(inscricoes, /drop\s+index/i);
+  assert.doesNotMatch(inscricoes, /create unique index/i);
 });
 
 test('resultado de partidas respeita VARCHAR e não exige nem cria fonte JSONB', () => {
