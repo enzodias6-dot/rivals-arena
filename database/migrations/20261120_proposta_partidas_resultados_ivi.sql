@@ -386,6 +386,7 @@ declare
   v_resposta jsonb;
   v_pontos_jogador_1 numeric;
   v_pontos_jogador_2 numeric;
+  v_vencedor_pelo_placar uuid;
 begin
   if v_ator is null then
     raise exception using errcode = '42501', message = 'authentication_required';
@@ -642,7 +643,6 @@ declare
   v_dados jsonb;
   v_pontos_jogador_1 numeric;
   v_pontos_jogador_2 numeric;
-  v_vencedor_pelo_placar uuid;
 begin
   if v_ator is null then
     raise exception using errcode = '42501', message = 'authentication_required';
