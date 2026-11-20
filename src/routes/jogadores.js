@@ -62,12 +62,26 @@ function criarRotasJogadores() {
       console.error(`Falha ao consultar posição no ranking do perfil: ${detalhe}`);
     }
 
+    let empates = 0;
+    try {
+      const contagemEmpates = await executar(
+        cliente.from('partida_empates')
+          .select('partida_id', { count: 'exact', head: true })
+          .eq('jogador_id', req.usuario.id)
+      );
+      empates = Number.isInteger(contagemEmpates.count) ? contagemEmpates.count : 0;
+    } catch (erro) {
+      if (!['42P01', 'PGRST205'].includes(erro?.code)) throw erro;
+      console.error('A contagem de empates ficará indisponível até a migração de partidas ser homologada.');
+    }
+
     return res.json({
       usuario: {
         ...jogador,
         pontos: Number(jogador.pontos),
         vitorias: Number(jogador.vitorias),
         derrotas: Number(jogador.derrotas),
+        empates,
         posicao
       }
     });

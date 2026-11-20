@@ -1,8 +1,7 @@
 -- PROPOSTA NÃO EXECUTADA.
--- Serializa entradas e reinscrições no PostgreSQL; a proteção também vale para inserts
--- que não usem a RPC antiga. Preserva linhas canceladas e substitui somente a constraint
--- conhecida inscricoes_campeonato_id_jogador_id_key, após confirmar seu tipo e colunas.
--- Índices standalone equivalentes bloqueiam a migração; nenhum índice é removido.
+-- Serializa entradas e reinscrições no PostgreSQL. Mantém a UNIQUE global conhecida
+-- inscricoes_campeonato_id_jogador_id_key: reinscrever é atualizar a mesma linha cancelada,
+-- preservando seu id e inscrito_em. Nenhum índice ou constraint UNIQUE é removido.
 -- Não substitui nem remove policies RLS; revise as policies atuais antes da aplicação.
 
 begin;
@@ -22,9 +21,9 @@ begin
     into v_colunas
     from pg_catalog.pg_attribute as a
    where a.attrelid = 'public.inscricoes'::regclass
-     and a.attname in ('id', 'campeonato_id', 'jogador_id', 'status')
+     and a.attname in ('id', 'campeonato_id', 'jogador_id', 'status', 'inscrito_em')
      and not a.attisdropped;
-  if v_colunas is distinct from array['campeonato_id', 'id', 'jogador_id', 'status']::text[] then
+  if v_colunas is distinct from array['campeonato_id', 'id', 'inscrito_em', 'jogador_id', 'status']::text[] then
     raise exception 'Confirme as colunas id, campeonato_id, jogador_id e status em public.inscricoes.';
   end if;
 
@@ -34,6 +33,7 @@ begin
       ('inscricoes', 'campeonato_id', 'uuid'),
       ('inscricoes', 'jogador_id', 'uuid'),
       ('inscricoes', 'status', 'string'),
+      ('inscricoes', 'inscrito_em', 'timestamp'),
       ('campeonatos', 'max_participantes', 'integer'),
       ('campeonatos', 'status', 'string')
     ) as esperado(tabela, coluna, tipo)
@@ -46,10 +46,26 @@ begin
     if v_tipo is null
        or (v_coluna.tipo = 'uuid' and v_tipo <> 'uuid')
        or (v_coluna.tipo = 'string' and v_tipo not in ('text', 'varchar', 'bpchar'))
-       or (v_coluna.tipo = 'integer' and v_tipo not in ('int2', 'int4', 'int8')) then
+       or (v_coluna.tipo = 'integer' and v_tipo not in ('int2', 'int4', 'int8'))
+       or (v_coluna.tipo = 'timestamp' and v_tipo not in ('timestamp', 'timestamptz')) then
       raise exception 'Tipo incompatível em public.%.%; interrompendo antes de alterar constraints.', v_coluna.tabela, v_coluna.coluna;
     end if;
   end loop;
+
+  if not exists (
+    select 1 from pg_catalog.pg_constraint as c
+     where c.conrelid = 'public.inscricoes'::regclass
+       and c.conname = 'inscricoes_campeonato_id_jogador_id_key'
+       and c.contype = 'u'
+       and c.conkey = array[
+         (select a.attnum::smallint from pg_catalog.pg_attribute as a
+           where a.attrelid = 'public.inscricoes'::regclass and a.attname = 'campeonato_id' and not a.attisdropped),
+         (select a.attnum::smallint from pg_catalog.pg_attribute as a
+           where a.attrelid = 'public.inscricoes'::regclass and a.attname = 'jogador_id' and not a.attisdropped)
+       ]::smallint[]
+  ) then
+    raise exception 'A UNIQUE global campeonato_id/jogador_id deve permanecer presente com exatamente essas duas colunas.';
+  end if;
 
   if exists (
     select 1 from public.inscricoes
@@ -69,6 +85,22 @@ begin
     raise exception 'Um objeto proposto para reinscrição já existe; compare sua definição antes de aplicar.';
   end if;
 
+  if not exists (
+    select 1 from pg_catalog.pg_class
+     where oid = 'public.inscricoes'::regclass and relrowsecurity
+  ) then
+    raise exception 'RLS precisa estar habilitada em public.inscricoes para permitir reinscrição segura.';
+  end if;
+
+  if exists (
+    select 1 from pg_catalog.pg_policies
+     where schemaname = 'public'
+       and tablename = 'inscricoes'
+       and policyname = 'inscricoes_reinscrever_propria_cancelada'
+  ) then
+    raise exception 'A policy inscricoes_reinscrever_propria_cancelada já existe; compare sua definição.';
+  end if;
+
   if exists (
     select 1
       from public.inscricoes
@@ -81,105 +113,8 @@ begin
 end
 $preflight$;
 
-do $replace_unique$
-declare
-  v_constraint_attnums smallint[];
-  v_campeonato_attnum smallint;
-  v_jogador_attnum smallint;
-  v_indices_standalone integer;
-  v_constraints_exatas integer;
-  v_dependencias_fk integer;
-begin
-  select a.attnum::smallint into v_campeonato_attnum
-    from pg_catalog.pg_attribute as a
-   where a.attrelid = 'public.inscricoes'::regclass
-     and a.attname = 'campeonato_id' and not a.attisdropped;
-  select a.attnum::smallint into v_jogador_attnum
-    from pg_catalog.pg_attribute as a
-   where a.attrelid = 'public.inscricoes'::regclass
-     and a.attname = 'jogador_id' and not a.attisdropped;
-
-  select c.conkey into v_constraint_attnums
-    from pg_catalog.pg_constraint as c
-   where c.conrelid = 'public.inscricoes'::regclass
-     and c.conname = 'inscricoes_campeonato_id_jogador_id_key'
-     and c.contype = 'u';
-
-  select count(*) into v_constraints_exatas
-    from pg_catalog.pg_constraint as c
-   where c.conrelid = 'public.inscricoes'::regclass
-     and c.contype = 'u'
-     and cardinality(c.conkey) = 2
-     and (
-       select array_agg(a.attname::text order by a.attname::text)
-         from unnest(c.conkey) as k(attnum)
-         join pg_catalog.pg_attribute as a
-           on a.attrelid = c.conrelid and a.attnum = k.attnum
-     ) = array['campeonato_id', 'jogador_id']::text[];
-
-  if (
-    (v_constraint_attnums is distinct from array[
-      v_campeonato_attnum, v_jogador_attnum
-    ]::smallint[] and v_constraint_attnums is distinct from array[
-      v_jogador_attnum, v_campeonato_attnum
-    ]::smallint[])
-    or v_constraints_exatas <> 1
-  ) then
-    raise exception 'A constraint inscricoes_campeonato_id_jogador_id_key não existe com UNIQUE exata sobre campeonato_id e jogador_id; interrompendo sem alterar constraints.';
-  end if;
-
-  select count(*) into v_dependencias_fk
-    from pg_catalog.pg_constraint as fk
-    join pg_catalog.pg_constraint as uq on uq.conindid = fk.conindid
-   where fk.contype = 'f'
-     and uq.conrelid = 'public.inscricoes'::regclass
-     and uq.conname = 'inscricoes_campeonato_id_jogador_id_key';
-  if v_dependencias_fk > 0 then
-    raise exception 'Há chaves estrangeiras dependentes da constraint de inscrição; revise-as antes de substituí-la.';
-  end if;
-
-  select count(*)
-    into v_indices_standalone
-    from pg_catalog.pg_index as i
-   where i.indrelid = 'public.inscricoes'::regclass
-     and i.indisunique
-     and not i.indisprimary
-     and i.indpred is null
-     and i.indexprs is null
-     and i.indnkeyatts = 2
-     and not exists (
-       select 1
-         from pg_catalog.pg_constraint as c
-        where c.conindid = i.indexrelid
-     )
-     and (
-       select array_agg(a.attname::text order by a.attname::text)
-         from unnest(i.indkey::smallint[]) with ordinality as k(attnum, ordem)
-         join pg_catalog.pg_attribute as a
-           on a.attrelid = i.indrelid and a.attnum = k.attnum
-        where k.ordem <= i.indnkeyatts
-     ) = array['campeonato_id', 'jogador_id']::text[];
-
-  if v_indices_standalone > 0 then
-    raise exception 'Índice UNIQUE standalone exato encontrado; não será removido automaticamente. Revise o catálogo e prepare uma alteração específica.';
-  end if;
-
-  alter table public.inscricoes
-    drop constraint inscricoes_campeonato_id_jogador_id_key;
-end
-$replace_unique$;
-
-do $partial_index_preflight$
-begin
-  if to_regclass('public.inscricoes_ativas_campeonato_jogador_uq') is not null then
-    raise exception 'O índice inscricoes_ativas_campeonato_jogador_uq já existe; compare sua definição antes de continuar.';
-  end if;
-end
-$partial_index_preflight$;
-
-create unique index inscricoes_ativas_campeonato_jogador_uq
-  on public.inscricoes (campeonato_id, jogador_id)
-  where status in ('pendente', 'aprovada');
+-- Mantém a UNIQUE global (campeonato_id, jogador_id): cada jogador possui
+-- uma única linha por campeonato, inclusive após cancelamento. Reinscrição é UPDATE.
 
 create function public.validar_inscricao_e_vagas()
 returns trigger
@@ -203,18 +138,25 @@ begin
     raise exception using errcode = '42501', message = 'registration_actor_mismatch';
   end if;
 
-  if tg_op = 'UPDATE' and
-     (new.campeonato_id <> old.campeonato_id or new.jogador_id <> old.jogador_id) then
+  if tg_op = 'UPDATE' and (
+       new.id is distinct from old.id
+       or new.campeonato_id is distinct from old.campeonato_id
+       or new.jogador_id is distinct from old.jogador_id
+       or new.inscrito_em is distinct from old.inscrito_em
+     ) then
     raise exception using errcode = '42501', message = 'registration_identity_immutable';
   end if;
 
   if tg_op = 'INSERT' then
     new.status := 'pendente';
+    new.inscrito_em := now();
   elsif tg_op = 'UPDATE' then
-    if old.status = 'cancelada' and new.status in ('pendente', 'aprovada') then
-      raise exception using errcode = 'P0001', message = 'rejoin_requires_new_history_row';
+    if old.status = 'cancelada' and new.status not in ('cancelada', 'pendente') then
+      raise exception using errcode = '42501', message = 'registration_status_transition_forbidden';
     end if;
-    if auth.uid() is not null and new.status not in (old.status, 'cancelada') then
+    if auth.uid() is not null
+       and new.status not in (old.status, 'cancelada')
+       and not (old.status = 'cancelada' and new.status = 'pendente') then
       raise exception using errcode = '42501', message = 'registration_status_transition_forbidden';
     end if;
   end if;
@@ -260,5 +202,39 @@ before insert or update of status, campeonato_id, jogador_id or delete on public
 for each row execute function public.validar_inscricao_e_vagas();
 
 revoke all on function public.validar_inscricao_e_vagas() from public, anon, authenticated;
+
+-- A API só altera status. A policy permite operações do próprio jogador; o trigger
+-- restringe as transições válidas e bloqueia alteração da identidade/data histórica.
+revoke update on public.inscricoes from public, anon, authenticated;
+do $revoke_registration_column_updates$
+declare
+  v_coluna record;
+begin
+  for v_coluna in
+    select a.attname
+      from pg_catalog.pg_attribute as a
+     where a.attrelid = 'public.inscricoes'::regclass
+       and a.attnum > 0
+       and not a.attisdropped
+  loop
+    execute pg_catalog.format(
+      'revoke update (%I) on public.inscricoes from public, anon, authenticated',
+      v_coluna.attname
+    );
+  end loop;
+end
+$revoke_registration_column_updates$;
+grant update (status) on public.inscricoes to authenticated;
+
+create policy inscricoes_reinscrever_propria_cancelada on public.inscricoes
+  for update to authenticated
+  using (
+    jogador_id = (select auth.uid())
+    and status in ('pendente', 'aprovada', 'cancelada')
+  )
+  with check (
+    jogador_id = (select auth.uid())
+    and status in ('pendente', 'aprovada', 'cancelada')
+  );
 
 commit;

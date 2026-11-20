@@ -69,6 +69,16 @@ begin
   select t.typname into v_tipo
     from pg_catalog.pg_attribute as a
     join pg_catalog.pg_type as t on t.oid = a.atttypid
+   where a.attrelid = 'public.usuarios'::regclass
+     and a.attname = 'empates'
+     and not a.attisdropped;
+  if v_tipo is not null and v_tipo not in ('int2', 'int4', 'int8') then
+    raise exception 'public.usuarios.empates, quando existente, deve ser uma coluna inteira.';
+  end if;
+
+  select t.typname into v_tipo
+    from pg_catalog.pg_attribute as a
+    join pg_catalog.pg_type as t on t.oid = a.atttypid
    where a.attrelid = 'public.partidas'::regclass
      and a.attname = 'concluida_em'
      and not a.attisdropped;
@@ -96,15 +106,16 @@ begin
        where c.conrelid = 'public.partidas'::regclass
          and c.contype = 'c'
          and v_status_attnum = any(c.conkey)
+         and c.conname <> 'partidas_status_check'
     ) then
-      raise exception 'Há CHECK existente sobre partidas.status; revise-o antes de propor novos estados.';
+      raise exception 'Existe CHECK adicional sobre partidas.status; revise-o manualmente antes da migração.';
     end if;
     execute $query$
       select exists (
         select 1 from public.partidas
          where status not in (
            'agendada', 'em_andamento', 'aguardando_confirmacao',
-           'disputada', 'concluida', 'cancelada'
+           'disputada', 'concluida', 'finalizada', 'cancelada'
          )
       )
     $query$ into v_status_invalido;
@@ -115,9 +126,47 @@ begin
 
   if to_regclass('public.partida_resultados') is not null
      or to_regclass('public.partida_resultado_eventos') is not null
+     or to_regclass('public.partida_empates') is not null
      or to_regclass('public.ivi_ratings') is not null
      or to_regclass('public.ivi_movimentacoes') is not null then
     raise exception 'Uma ou mais estruturas propostas já existem; compare o DDL antes de aplicar.';
+  end if;
+
+  if not exists (
+    select 1 from pg_catalog.pg_class
+     where oid = 'public.partidas'::regclass and relrowsecurity
+  ) then
+    raise exception 'RLS precisa estar habilitada em public.partidas antes de liberar a fila administrativa.';
+  end if;
+  if not exists (
+    select 1 from pg_catalog.pg_class
+     where oid = 'public.usuarios'::regclass and relrowsecurity
+  ) then
+    raise exception 'RLS precisa estar habilitada em public.usuarios para proteger o perfil e o papel administrativo.';
+  end if;
+
+  if exists (
+    select 1 from pg_catalog.pg_policies
+     where schemaname = 'public'
+       and tablename = 'usuarios'
+       and policyname = 'usuarios_update_nome_proprio'
+  ) or exists (
+    select 1 from pg_catalog.pg_policies
+     where schemaname = 'public'
+       and tablename = 'partidas'
+       and policyname = 'partidas_select_admin_disputadas'
+  ) or exists (
+    select 1 from pg_catalog.pg_policies
+     where schemaname = 'public'
+       and tablename = 'partida_resultados'
+       and policyname = 'partida_resultados_select_admin'
+  ) or exists (
+    select 1 from pg_catalog.pg_policies
+     where schemaname = 'public'
+       and tablename = 'partida_resultado_eventos'
+       and policyname = 'partida_resultado_eventos_select_admin'
+  ) then
+    raise exception 'Uma policy administrativa proposta já existe; compare sua definição.';
   end if;
 
   if exists (
@@ -133,10 +182,14 @@ begin
      where p.pronamespace = 'public'::regnamespace
        and p.proname in (
          'submeter_resultado_partida', 'confirmar_resultado_partida',
-         'contestar_resultado_partida', 'agendar_partida'
+         'contestar_resultado_partida', 'resolver_resultado_partida', 'agendar_partida'
+       )
+       and not (
+         p.proname = 'confirmar_resultado_partida'
+         and pg_catalog.oidvectortypes(p.proargtypes) = 'uuid, uuid, character varying'
        )
   ) then
-    raise exception 'Já existe uma RPC de partidas com nome proposto; compare as assinaturas antes de aplicar.';
+    raise exception 'Existe uma RPC de partidas com assinatura inesperada; compare-a antes de aplicar.';
   end if;
 
   if to_regclass('public.partidas_jogador_1_agendamento_idx') is not null
@@ -149,9 +202,61 @@ begin
 end
 $preflight$;
 
+-- Compatibiliza os nomes e tipos reais antes de criar as novas RPCs.
+do $compatibilidade_colunas$
+begin
+  if exists (
+    select 1 from pg_catalog.pg_attribute
+     where attrelid = 'public.partidas'::regclass
+       and attname = 'data_agendada' and not attisdropped
+  ) and not exists (
+    select 1 from pg_catalog.pg_attribute
+     where attrelid = 'public.partidas'::regclass
+       and attname = 'agendada_para' and not attisdropped
+  ) then
+    alter table public.partidas rename column data_agendada to agendada_para;
+  elsif exists (
+    select 1 from pg_catalog.pg_attribute
+     where attrelid = 'public.partidas'::regclass
+       and attname = 'data_agendada' and not attisdropped
+  ) and exists (
+    select 1 from pg_catalog.pg_attribute
+     where attrelid = 'public.partidas'::regclass
+       and attname = 'agendada_para' and not attisdropped
+  ) then
+    raise exception 'As colunas data_agendada e agendada_para coexistem; faça a conciliação manual antes da migração.';
+  else
+    alter table public.partidas add column if not exists agendada_para timestamptz;
+  end if;
+end
+$compatibilidade_colunas$;
+
+do $compatibilidade_status$
+declare
+  v_restricao record;
+begin
+  for v_restricao in
+    select c.conname
+      from pg_catalog.pg_constraint as c
+     where c.conrelid = 'public.partidas'::regclass
+       and c.contype = 'c'
+       and c.conname = 'partidas_status_check'
+  loop
+    execute pg_catalog.format('alter table public.partidas drop constraint %I', v_restricao.conname);
+  end loop;
+end
+$compatibilidade_status$;
+
 alter table public.partidas
-  add column if not exists status text,
-  add column if not exists agendada_para timestamptz;
+  alter column status type text using status::text,
+  alter column resultado type text using resultado::text;
+
+-- A RPC antiga tinha a assinatura (uuid, uuid, varchar); o backend usa
+-- (uuid, uuid). Removemos somente essa assinatura conhecida, sem CASCADE.
+drop function if exists public.confirmar_resultado_partida(uuid, uuid, character varying);
+
+-- NULL em vencedor_id representa empate confirmado.
+alter table public.partidas alter column vencedor_id drop not null;
 
 do $validate_schedule_type$
 declare
@@ -168,6 +273,10 @@ begin
   end if;
 end
 $validate_schedule_type$;
+
+update public.partidas
+   set status = 'concluida'
+ where status = 'finalizada';
 
 update public.partidas
    set status = case
@@ -196,7 +305,7 @@ create index partidas_status_idx on public.partidas (status);
 create table public.partida_resultados (
   partida_id uuid primary key references public.partidas(id) on delete restrict,
   reportado_por uuid not null references public.usuarios(id) on delete restrict,
-  vencedor_id uuid not null references public.usuarios(id) on delete restrict,
+  vencedor_id uuid references public.usuarios(id) on delete restrict,
   resultado text not null check (resultado ~ '^[0-9]{1,31}-[0-9]{1,31}$'),
   status text not null default 'aguardando_confirmacao'
     check (status in ('aguardando_confirmacao', 'disputada')),
@@ -212,8 +321,7 @@ create table public.partida_resultados (
       and contestado_por is null and vencedor_contestado_id is null
       and resultado_contestado is null)
     or (status = 'disputada'
-      and contestado_por is not null and vencedor_contestado_id is not null
-      and resultado_contestado is not null)
+      and contestado_por is not null and resultado_contestado is not null)
   )
 );
 
@@ -222,7 +330,7 @@ create table public.partida_resultado_eventos (
   partida_id uuid not null references public.partidas(id) on delete restrict,
   ator_id uuid not null references public.usuarios(id) on delete restrict,
   chave_idempotencia uuid not null unique,
-  acao text not null check (acao in ('relatado', 'confirmado', 'contestado')),
+  acao text not null check (acao in ('relatado', 'confirmado', 'contestado', 'resolvido_admin')),
   dados jsonb not null check (
     jsonb_typeof(dados) = 'object' and pg_column_size(dados) <= 8192
   ),
@@ -231,6 +339,13 @@ create table public.partida_resultado_eventos (
 
 create index partida_resultado_eventos_partida_idx
   on public.partida_resultado_eventos (partida_id, criado_em);
+
+create table public.partida_empates (
+  partida_id uuid not null references public.partidas(id) on delete restrict,
+  jogador_id uuid not null references public.usuarios(id) on delete restrict,
+  criado_em timestamptz not null default now(),
+  primary key (partida_id, jogador_id)
+);
 
 create table public.ivi_ratings (
   jogador_id uuid primary key references public.usuarios(id) on delete restrict,
@@ -256,12 +371,13 @@ create index ivi_movimentacoes_jogador_data_idx
 
 alter table public.partida_resultados enable row level security;
 alter table public.partida_resultado_eventos enable row level security;
+alter table public.partida_empates enable row level security;
 alter table public.ivi_ratings enable row level security;
 alter table public.ivi_movimentacoes enable row level security;
 revoke all on public.partida_resultados, public.partida_resultado_eventos,
-  public.ivi_ratings, public.ivi_movimentacoes from public, anon, authenticated;
+  public.partida_empates, public.ivi_ratings, public.ivi_movimentacoes from public, anon, authenticated;
 grant select on public.partida_resultados, public.partida_resultado_eventos,
-  public.ivi_ratings, public.ivi_movimentacoes to authenticated;
+  public.partida_empates, public.ivi_ratings, public.ivi_movimentacoes to authenticated;
 
 create policy partida_resultados_select_participantes on public.partida_resultados
   for select to authenticated
@@ -278,6 +394,31 @@ create policy partida_resultado_eventos_select_participantes on public.partida_r
      where p.id = partida_resultado_eventos.partida_id
        and (p.jogador_1_id = (select auth.uid()) or p.jogador_2_id = (select auth.uid()))
   ));
+
+create policy partida_resultados_select_admin on public.partida_resultados
+  for select to authenticated
+  using (
+    status = 'disputada'
+    and exists (
+      select 1 from public.usuarios as u
+       where u.id = (select auth.uid()) and u.perfil = 'admin'
+    )
+  );
+
+create policy partida_resultado_eventos_select_admin on public.partida_resultado_eventos
+  for select to authenticated
+  using (exists (
+    select 1 from public.usuarios as u
+     where u.id = (select auth.uid()) and u.perfil = 'admin'
+  ));
+
+create policy partida_empates_select_participantes on public.partida_empates
+  for select to authenticated using (
+    jogador_id = (select auth.uid()) and exists (
+      select 1 from public.partidas as p where p.id = partida_empates.partida_id
+        and (p.jogador_1_id = (select auth.uid()) or p.jogador_2_id = (select auth.uid()))
+    )
+  );
 
 create policy ivi_ratings_select_owner on public.ivi_ratings
   for select to authenticated using (jogador_id = (select auth.uid()));
@@ -308,15 +449,16 @@ begin
   if v_ator is null then
     raise exception using errcode = '42501', message = 'authentication_required';
   end if;
-  if p_chave_idempotencia is null or p_vencedor_id is null or p_resultado is null
+  if p_chave_idempotencia is null or p_resultado is null
      or length(p_resultado) > 63
      or p_resultado !~ '^[0-9]{1,31}-[0-9]{1,31}$' then
     raise exception using errcode = '22023', message = 'invalid_result_payload';
   end if;
   v_pontos_jogador_1 := split_part(p_resultado, '-', 1)::numeric;
   v_pontos_jogador_2 := split_part(p_resultado, '-', 2)::numeric;
-  if v_pontos_jogador_1 = v_pontos_jogador_2 then
-    raise exception using errcode = '22023', message = 'draw_not_supported';
+  if (v_pontos_jogador_1 = v_pontos_jogador_2 and p_vencedor_id is not null)
+     or (v_pontos_jogador_1 <> v_pontos_jogador_2 and p_vencedor_id is null) then
+    raise exception using errcode = '22023', message = 'score_winner_mismatch';
   end if;
 
   perform pg_catalog.pg_advisory_xact_lock(
@@ -359,14 +501,15 @@ begin
   if v_ator <> v_partida.jogador_1_id and v_ator <> v_partida.jogador_2_id then
     raise exception using errcode = '42501', message = 'match_participant_required';
   end if;
-  if p_vencedor_id <> v_partida.jogador_1_id and p_vencedor_id <> v_partida.jogador_2_id then
+  if p_vencedor_id is not null and p_vencedor_id <> v_partida.jogador_1_id and p_vencedor_id <> v_partida.jogador_2_id then
     raise exception using errcode = '22023', message = 'winner_must_be_participant';
   end if;
   v_vencedor_pelo_placar := case
+    when v_pontos_jogador_1 = v_pontos_jogador_2 then null
     when v_pontos_jogador_1 > v_pontos_jogador_2 then v_partida.jogador_1_id
     else v_partida.jogador_2_id
   end;
-  if p_vencedor_id <> v_vencedor_pelo_placar then
+  if p_vencedor_id is distinct from v_vencedor_pelo_placar then
     raise exception using errcode = '22023', message = 'score_winner_mismatch';
   end if;
   if v_partida.status in ('concluida', 'cancelada') or v_partida.concluida_em is not null then
@@ -394,20 +537,26 @@ begin
       raise exception using errcode = 'P0001', message = 'result_not_open_for_submission';
     end if;
 
-    if v_resultado.vencedor_id = p_vencedor_id and v_resultado.resultado = p_resultado then
+    if v_resultado.vencedor_id is not distinct from p_vencedor_id and v_resultado.resultado = p_resultado then
       update public.partidas
          set status = 'concluida',
              vencedor_id = p_vencedor_id,
              resultado = p_resultado,
              concluida_em = now()
        where id = p_partida_id;
-      update public.usuarios
-         set vitorias = coalesce(vitorias, 0) + 1
-       where id = p_vencedor_id;
-      update public.usuarios
-         set derrotas = coalesce(derrotas, 0) + 1
-       where id = case when p_vencedor_id = v_partida.jogador_1_id
-         then v_partida.jogador_2_id else v_partida.jogador_1_id end;
+      if p_vencedor_id is null then
+        insert into public.partida_empates (partida_id, jogador_id)
+        values (p_partida_id, v_partida.jogador_1_id), (p_partida_id, v_partida.jogador_2_id);
+        if exists (select 1 from pg_catalog.pg_attribute where attrelid = 'public.usuarios'::regclass and attname = 'empates' and not attisdropped) then
+          execute 'update public.usuarios set empates = coalesce(empates, 0) + 1 where id in ($1, $2)'
+            using v_partida.jogador_1_id, v_partida.jogador_2_id;
+        end if;
+      else
+        update public.usuarios set vitorias = coalesce(vitorias, 0) + 1 where id = p_vencedor_id;
+        update public.usuarios set derrotas = coalesce(derrotas, 0) + 1
+         where id = case when p_vencedor_id = v_partida.jogador_1_id
+           then v_partida.jogador_2_id else v_partida.jogador_1_id end;
+      end if;
       delete from public.partida_resultados where partida_id = p_partida_id;
       v_acao := 'confirmado';
       v_resposta := jsonb_build_object(
@@ -510,13 +659,19 @@ begin
          resultado = v_resultado.resultado,
          concluida_em = now()
    where id = p_partida_id;
-  update public.usuarios
-     set vitorias = coalesce(vitorias, 0) + 1
-   where id = v_resultado.vencedor_id;
-  update public.usuarios
-     set derrotas = coalesce(derrotas, 0) + 1
-   where id = case when v_resultado.vencedor_id = v_partida.jogador_1_id
-     then v_partida.jogador_2_id else v_partida.jogador_1_id end;
+  if v_resultado.vencedor_id is null then
+    insert into public.partida_empates (partida_id, jogador_id)
+    values (p_partida_id, v_partida.jogador_1_id), (p_partida_id, v_partida.jogador_2_id);
+    if exists (select 1 from pg_catalog.pg_attribute where attrelid = 'public.usuarios'::regclass and attname = 'empates' and not attisdropped) then
+      execute 'update public.usuarios set empates = coalesce(empates, 0) + 1 where id in ($1, $2)'
+        using v_partida.jogador_1_id, v_partida.jogador_2_id;
+    end if;
+  else
+    update public.usuarios set vitorias = coalesce(vitorias, 0) + 1 where id = v_resultado.vencedor_id;
+    update public.usuarios set derrotas = coalesce(derrotas, 0) + 1
+     where id = case when v_resultado.vencedor_id = v_partida.jogador_1_id
+       then v_partida.jogador_2_id else v_partida.jogador_1_id end;
+  end if;
   delete from public.partida_resultados where partida_id = p_partida_id;
   insert into public.partida_resultado_eventos (
     partida_id, ator_id, chave_idempotencia, acao, dados
@@ -546,40 +701,56 @@ declare
   v_dados jsonb;
   v_pontos_jogador_1 numeric;
   v_pontos_jogador_2 numeric;
-  v_vencedor_pelo_placar uuid;
 begin
   if v_ator is null then
     raise exception using errcode = '42501', message = 'authentication_required';
   end if;
-  if p_chave_idempotencia is null or p_vencedor_id is null or p_resultado is null
+  if p_chave_idempotencia is null or p_resultado is null
      or length(p_resultado) > 63
      or p_resultado !~ '^[0-9]{1,31}-[0-9]{1,31}$' then
     raise exception using errcode = '22023', message = 'invalid_result_payload';
   end if;
+
   v_pontos_jogador_1 := split_part(p_resultado, '-', 1)::numeric;
   v_pontos_jogador_2 := split_part(p_resultado, '-', 2)::numeric;
   v_dados := jsonb_build_object(
-    'operacao', 'contestar', 'vencedor_id', p_vencedor_id, 'resultado', p_resultado
+    'operacao', 'contestar',
+    'vencedor_id', p_vencedor_id,
+    'resultado', p_resultado
   );
+
+  if (v_pontos_jogador_1 = v_pontos_jogador_2 and p_vencedor_id is not null)
+     or (v_pontos_jogador_1 > v_pontos_jogador_2 and p_vencedor_id is null)
+     or (v_pontos_jogador_1 < v_pontos_jogador_2 and p_vencedor_id is null) then
+    raise exception using errcode = '22023', message = 'score_winner_mismatch';
+  end if;
 
   perform pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(p_chave_idempotencia::text, 1)
   );
-  select * into v_evento from public.partida_resultado_eventos
+  select * into v_evento
+    from public.partida_resultado_eventos
    where chave_idempotencia = p_chave_idempotencia;
   if found then
-    if v_evento.ator_id <> v_ator or v_evento.partida_id <> p_partida_id
-       or v_evento.acao <> 'contestado' or v_evento.dados <> v_dados then
+    if v_evento.ator_id <> v_ator
+       or v_evento.partida_id <> p_partida_id
+       or v_evento.acao <> 'contestado'
+       or v_evento.dados <> v_dados then
       raise exception using errcode = '23505', message = 'idempotency_key_reused';
     end if;
-    select * into v_resultado from public.partida_resultados where partida_id = p_partida_id;
+    select * into v_resultado
+      from public.partida_resultados
+     where partida_id = p_partida_id;
     if not found then
       raise exception using errcode = 'P0002', message = 'result_not_found';
     end if;
     return to_jsonb(v_resultado);
   end if;
 
-  select * into v_partida from public.partidas where id = p_partida_id for update;
+  select * into v_partida
+    from public.partidas
+   where id = p_partida_id
+   for update;
   if not found then
     raise exception using errcode = 'P0002', message = 'match_not_found';
   end if;
@@ -587,33 +758,41 @@ begin
      or v_partida.jogador_1_id = v_partida.jogador_2_id then
     raise exception using errcode = '22023', message = 'match_participants_invalid';
   end if;
-  if v_partida.status in ('concluida', 'cancelada') or v_partida.concluida_em is not null then
+  if v_ator <> v_partida.jogador_1_id and v_ator <> v_partida.jogador_2_id then
+    raise exception using errcode = '42501', message = 'match_participant_required';
+  end if;
+  if v_partida.status in ('concluida', 'cancelada')
+     or v_partida.concluida_em is not null then
     raise exception using errcode = 'P0001', message = 'match_finalized';
   end if;
-  if p_vencedor_id <> v_partida.jogador_1_id and p_vencedor_id <> v_partida.jogador_2_id then
+  if p_vencedor_id is not null
+     and p_vencedor_id not in (v_partida.jogador_1_id, v_partida.jogador_2_id) then
     raise exception using errcode = '22023', message = 'winner_must_be_participant';
   end if;
+
   if v_pontos_jogador_1 = v_pontos_jogador_2 then
-    raise exception using errcode = '22023', message = 'draw_not_supported';
-  end if;
-  v_vencedor_pelo_placar := case
-    when v_pontos_jogador_1 > v_pontos_jogador_2 then v_partida.jogador_1_id
-    else v_partida.jogador_2_id
-  end;
-  if p_vencedor_id <> v_vencedor_pelo_placar then
+    if p_vencedor_id is not null then
+      raise exception using errcode = '22023', message = 'score_winner_mismatch';
+    end if;
+  elsif (v_pontos_jogador_1 > v_pontos_jogador_2
+         and p_vencedor_id is distinct from v_partida.jogador_1_id)
+     or (v_pontos_jogador_1 < v_pontos_jogador_2
+         and p_vencedor_id is distinct from v_partida.jogador_2_id) then
     raise exception using errcode = '22023', message = 'score_winner_mismatch';
   end if;
 
-  select * into v_resultado from public.partida_resultados
-   where partida_id = p_partida_id for update;
+  select * into v_resultado
+    from public.partida_resultados
+   where partida_id = p_partida_id
+   for update;
   if not found or v_resultado.status <> 'aguardando_confirmacao' then
     raise exception using errcode = 'P0001', message = 'result_not_open_for_contest';
   end if;
-  if v_ator = v_resultado.reportado_por
-     or (v_ator <> v_partida.jogador_1_id and v_ator <> v_partida.jogador_2_id) then
+  if v_ator = v_resultado.reportado_por then
     raise exception using errcode = '42501', message = 'opponent_contest_required';
   end if;
-  if v_resultado.vencedor_id = p_vencedor_id and v_resultado.resultado = p_resultado then
+  if v_resultado.vencedor_id is not distinct from p_vencedor_id
+     and v_resultado.resultado = p_resultado then
     raise exception using errcode = 'P0001', message = 'result_not_divergent';
   end if;
 
@@ -623,12 +802,145 @@ begin
          vencedor_contestado_id = p_vencedor_id,
          resultado_contestado = p_resultado,
          atualizado_em = now()
-   where partida_id = p_partida_id returning * into v_resultado;
+   where partida_id = p_partida_id
+  returning * into v_resultado;
   update public.partidas set status = 'disputada' where id = p_partida_id;
+
   insert into public.partida_resultado_eventos (
     partida_id, ator_id, chave_idempotencia, acao, dados
-  ) values (p_partida_id, v_ator, p_chave_idempotencia, 'contestado', v_dados);
+  ) values (
+    p_partida_id, v_ator, p_chave_idempotencia, 'contestado', v_dados
+  );
   return to_jsonb(v_resultado);
+end
+$function$;
+
+create function public.resolver_resultado_partida(
+  p_partida_id uuid,
+  p_vencedor_id uuid,
+  p_resultado text,
+  p_justificativa text,
+  p_chave_idempotencia uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_ator uuid := auth.uid();
+  v_perfil text;
+  v_partida public.partidas;
+  v_resultado public.partida_resultados;
+  v_evento public.partida_resultado_eventos;
+  v_dados jsonb;
+  v_pontos_jogador_1 numeric;
+  v_pontos_jogador_2 numeric;
+  v_resposta jsonb;
+begin
+  if v_ator is null then
+    raise exception using errcode = '42501', message = 'authentication_required';
+  end if;
+  select u.perfil into v_perfil from public.usuarios as u where u.id = v_ator;
+  if v_perfil is distinct from 'admin' then
+    raise exception using errcode = '42501', message = 'administrator_required';
+  end if;
+
+  if p_chave_idempotencia is null or p_resultado is null
+     or length(p_resultado) > 63
+     or p_resultado !~ '^[0-9]{1,31}-[0-9]{1,31}$'
+     or p_justificativa is null
+     or length(pg_catalog.btrim(p_justificativa)) = 0
+     or length(pg_catalog.btrim(p_justificativa)) > 1000 then
+    raise exception using errcode = '22023', message = 'invalid_admin_resolution_payload';
+  end if;
+  v_pontos_jogador_1 := split_part(p_resultado, '-', 1)::numeric;
+  v_pontos_jogador_2 := split_part(p_resultado, '-', 2)::numeric;
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_chave_idempotencia::text, 1));
+  v_dados := jsonb_build_object(
+    'operacao', 'resolver_admin',
+    'vencedor_id', p_vencedor_id,
+    'resultado', p_resultado,
+    'justificativa', pg_catalog.btrim(p_justificativa)
+  );
+  select * into v_evento from public.partida_resultado_eventos
+   where chave_idempotencia = p_chave_idempotencia;
+  if found then
+    if v_evento.ator_id <> v_ator or v_evento.partida_id <> p_partida_id
+       or v_evento.acao <> 'resolvido_admin' or v_evento.dados <> v_dados then
+      raise exception using errcode = '23505', message = 'idempotency_key_reused';
+    end if;
+    select jsonb_build_object(
+      'partida_id', p.id, 'vencedor_id', p.vencedor_id,
+      'resultado', p.resultado, 'status', 'confirmada',
+      'confirmado_em', p.concluida_em, 'resolvido_por', v_ator,
+      'justificativa', v_dados ->> 'justificativa'
+    ) into v_resposta from public.partidas as p
+     where p.id = p_partida_id and p.status = 'concluida';
+    if v_resposta is null then
+      raise exception using errcode = 'P0002', message = 'result_not_found';
+    end if;
+    return v_resposta;
+  end if;
+
+  select * into v_partida from public.partidas where id = p_partida_id for update;
+  if not found then
+    raise exception using errcode = 'P0002', message = 'match_not_found';
+  end if;
+  if v_partida.status <> 'disputada' or v_partida.concluida_em is not null then
+    raise exception using errcode = 'P0001', message = 'result_not_disputed';
+  end if;
+  if v_partida.jogador_1_id is null or v_partida.jogador_2_id is null
+     or v_partida.jogador_1_id = v_partida.jogador_2_id then
+    raise exception using errcode = '22023', message = 'match_participants_invalid';
+  end if;
+  if p_vencedor_id is not null
+     and p_vencedor_id not in (v_partida.jogador_1_id, v_partida.jogador_2_id) then
+    raise exception using errcode = '22023', message = 'winner_must_be_participant';
+  end if;
+  if (v_pontos_jogador_1 = v_pontos_jogador_2 and p_vencedor_id is not null)
+     or (v_pontos_jogador_1 > v_pontos_jogador_2 and p_vencedor_id is distinct from v_partida.jogador_1_id)
+     or (v_pontos_jogador_1 < v_pontos_jogador_2 and p_vencedor_id is distinct from v_partida.jogador_2_id) then
+    raise exception using errcode = '22023', message = 'score_winner_mismatch';
+  end if;
+
+  select * into v_resultado from public.partida_resultados
+   where partida_id = p_partida_id for update;
+  if not found or v_resultado.status <> 'disputada' then
+    raise exception using errcode = 'P0001', message = 'result_not_disputed';
+  end if;
+
+  update public.partidas
+     set status = 'concluida', vencedor_id = p_vencedor_id,
+         resultado = p_resultado, concluida_em = now()
+   where id = p_partida_id;
+
+  if p_vencedor_id is null then
+    insert into public.partida_empates (partida_id, jogador_id)
+    values (p_partida_id, v_partida.jogador_1_id),
+           (p_partida_id, v_partida.jogador_2_id);
+    if exists (select 1 from pg_catalog.pg_attribute
+      where attrelid = 'public.usuarios'::regclass and attname = 'empates' and not attisdropped) then
+      execute 'update public.usuarios set empates = coalesce(empates, 0) + 1 where id in ($1, $2)'
+        using v_partida.jogador_1_id, v_partida.jogador_2_id;
+    end if;
+  else
+    update public.usuarios set vitorias = coalesce(vitorias, 0) + 1 where id = p_vencedor_id;
+    update public.usuarios set derrotas = coalesce(derrotas, 0) + 1
+     where id = case when p_vencedor_id = v_partida.jogador_1_id
+       then v_partida.jogador_2_id else v_partida.jogador_1_id end;
+  end if;
+
+  delete from public.partida_resultados where partida_id = p_partida_id;
+  insert into public.partida_resultado_eventos (partida_id, ator_id, chave_idempotencia, acao, dados)
+  values (p_partida_id, v_ator, p_chave_idempotencia, 'resolvido_admin', v_dados);
+
+  return jsonb_build_object(
+    'partida_id', p_partida_id, 'vencedor_id', p_vencedor_id,
+    'resultado', p_resultado, 'status', 'confirmada',
+    'confirmado_em', now(), 'resolvido_por', v_ator,
+    'justificativa', v_dados ->> 'justificativa'
+  );
 end
 $function$;
 
@@ -667,20 +979,78 @@ begin
 end
 $function$;
 
--- A API lê partidas diretamente e faz somente a alteração de nome no perfil.
--- Removem-se apenas privilégios DML diretos de anon nestas tabelas; ACLs de PUBLIC
--- e grants existentes de authenticated requerem inventário próprio antes da revisão final.
+-- As views públicas expõem somente campos de perfil/ranking que o frontend utiliza.
+-- vw_perfis_publicos é SECURITY DEFINER para permitir consultar nomes de adversários
+-- sem abrir SELECT geral em usuarios; email e perfil administrativo ficam fora da projeção.
+alter view public.vw_perfis_publicos
+  set (security_invoker = false, security_barrier = true);
+create or replace view public.vw_perfis_publicos
+  with (security_invoker = false, security_barrier = true)
+as
+  select id, nome, nivel, pontos, vitorias, derrotas
+    from public.usuarios;
+
+revoke all on public.vw_perfis_publicos from public, anon, authenticated;
+grant select on public.vw_perfis_publicos to authenticated;
+
+-- O endpoint público de status consulta esta view, cuja projeção não contém dados privados.
+revoke all on public.vw_ranking_publico from public, anon, authenticated;
+grant select on public.vw_ranking_publico to anon, authenticated;
+
+-- A API altera somente usuarios.nome. Usuários autenticados não podem mudar
+-- perfil, pontos ou estatísticas diretamente; a resolução consulta perfil='admin'
+-- dentro da RPC SECURITY DEFINER. O preflight/auditoria do ambiente ainda precisa
+-- confirmar as policies RLS e ACLs preexistentes antes da aplicação.
 revoke insert, update, delete, truncate, references, trigger
   on public.partidas, public.usuarios from anon;
+revoke update on public.usuarios from public, anon, authenticated;
+do $revoke_column_updates$
+declare
+  v_coluna record;
+begin
+  for v_coluna in
+    select a.attname
+      from pg_catalog.pg_attribute as a
+     where a.attrelid = 'public.usuarios'::regclass
+       and a.attnum > 0
+       and not a.attisdropped
+  loop
+    execute pg_catalog.format(
+      'revoke update (%I) on public.usuarios from public, anon, authenticated',
+      v_coluna.attname
+    );
+  end loop;
+end
+$revoke_column_updates$;
+grant update (nome) on public.usuarios to authenticated;
+
+create policy usuarios_update_nome_proprio on public.usuarios
+  for update to authenticated
+  using (id = (select auth.uid()))
+  with check (id = (select auth.uid()));
+
 grant select on public.partidas to authenticated;
+
+create policy partidas_select_admin_disputadas on public.partidas
+  for select to authenticated
+  using (
+    status = 'disputada'
+    and exists (
+      select 1 from public.usuarios as u
+       where u.id = (select auth.uid())
+         and u.perfil = 'admin'
+    )
+  );
 
 revoke all on function public.submeter_resultado_partida(uuid, uuid, text, uuid) from public, anon;
 revoke all on function public.confirmar_resultado_partida(uuid, uuid) from public, anon;
 revoke all on function public.contestar_resultado_partida(uuid, uuid, text, uuid) from public, anon;
 revoke all on function public.agendar_partida(uuid, timestamptz) from public, anon;
+revoke all on function public.resolver_resultado_partida(uuid, uuid, text, text, uuid) from public, anon;
 grant execute on function public.submeter_resultado_partida(uuid, uuid, text, uuid) to authenticated;
 grant execute on function public.confirmar_resultado_partida(uuid, uuid) to authenticated;
 grant execute on function public.contestar_resultado_partida(uuid, uuid, text, uuid) to authenticated;
 grant execute on function public.agendar_partida(uuid, timestamptz) to authenticated;
+grant execute on function public.resolver_resultado_partida(uuid, uuid, text, text, uuid) to authenticated;
 
 commit;

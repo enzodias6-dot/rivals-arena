@@ -119,13 +119,12 @@ function criarRotasTorneios() {
 
     const { data: inscricaoExistente } = await executar(
       cliente.from('inscricoes')
-        .select('id')
+        .select('id,status,inscrito_em')
         .eq('campeonato_id', campeonatoId)
         .eq('jogador_id', req.usuario.id)
-        .in('status', STATUS_INSCRICAO_ATIVA)
         .maybeSingle()
     );
-    if (inscricaoExistente) {
+    if (inscricaoExistente && STATUS_INSCRICAO_ATIVA.includes(inscricaoExistente.status)) {
       return res.status(409).json({ mensagem: 'Você já está inscrito neste torneio.' });
     }
 
@@ -142,10 +141,16 @@ function criarRotasTorneios() {
       return res.status(409).json({ mensagem: 'Todas as vagas deste torneio já foram preenchidas.' });
     }
 
-    const { error } = await cliente.from('inscricoes').insert({
-      campeonato_id: campeonatoId,
-      jogador_id: req.usuario.id
-    });
+    const consultaInscricao = inscricaoExistente
+      ? cliente.from('inscricoes')
+        .update({ status: 'pendente' })
+        .eq('id', inscricaoExistente.id)
+        .eq('status', 'cancelada')
+      : cliente.from('inscricoes').insert({
+        campeonato_id: campeonatoId,
+        jogador_id: req.usuario.id
+      });
+    const { data: inscricaoAtualizada, error } = await consultaInscricao.select('id,status,inscrito_em');
     if (error) {
       if (error.code === 'P0001' && error.message === 'championship_full') {
         return res.status(409).json({ mensagem: 'Todas as vagas deste torneio já foram preenchidas.' });
@@ -159,8 +164,15 @@ function criarRotasTorneios() {
       throw error;
     }
 
+    if (!inscricaoAtualizada?.length) {
+      return res.status(409).json({ mensagem: 'Não foi possível reativar sua inscrição. Atualize a página e tente novamente.' });
+    }
+
     return res.status(201).json({
-      mensagem: `Inscrição confirmada em ${campeonato.nome}!`,
+      mensagem: inscricaoExistente
+        ? `Reinscrição confirmada em ${campeonato.nome}!`
+        : `Inscrição confirmada em ${campeonato.nome}!`,
+      inscricao: inscricaoAtualizada[0],
       inscritos: totalInscricoes + 1
     });
   });

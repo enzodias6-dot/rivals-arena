@@ -422,9 +422,14 @@ test('perfil e ranking usam a view pública de ranking e mantêm a ordenação e
     'derrotas', 'id', 'nome', 'pontos', 'posicao', 'vitorias'
   ]);
 
+  amb.supabase.seed('partida_empates', {
+    partida_id: UUID(),
+    jogador_id: ana.id
+  });
   const perfil = await amb.chamar('GET', '/api/perfil', { cookie: ana.cookie });
   assert.equal(perfil.status, 200);
   assert.equal(perfil.json.usuario.posicao, 3);
+  assert.equal(perfil.json.usuario.empates, 1);
   assert.equal(perfil.json.usuario.nome, 'Ana');
   assert.equal(perfil.json.usuario.email, ana.email);
   assert.equal(perfil.json.usuario.perfil, 'jogador');
@@ -1152,6 +1157,24 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
     message: 'Signup disabled'
   });
 
+  const cadastro = await amb.chamar('POST', '/api/usuarios', {
+    corpo: { nome: 'Teste Bloqueado', email: 'bloqueado@teste.com', senha: 'senha-forte-123' }
+  });
+  assert.equal(cadastro.status, 403);
+  assert.doesNotMatch(cadastro.json.mensagem, /políticas de acesso/i);
+
+  amb.supabase.falharAuth('signInWithPassword', {
+    status: 403,
+    code: 'user_banned',
+    message: 'User is banned'
+  });
+  const login = await amb.chamar('POST', '/api/login', {
+    corpo: { email: 'bloqueado@teste.com', senha: 'senha-forte-123' }
+  });
+  assert.equal(login.status, 403);
+  assert.doesNotMatch(login.json.mensagem, /políticas de acesso/i);
+});
+
   test('Times usa a identidade autenticada e oferece solicitação, aprovação, saída e transferência', async (t) => {
     const amb = await criarAmbiente();
     t.after(amb.encerrar);
@@ -1326,7 +1349,7 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
     })).status, 404);
   });
 
-  test('inscrição pode ser refeita após cancelamento e preserva as duas entradas no histórico', async (t) => {
+  test('reinscrição reutiliza a mesma linha e preserva ID e data original', async (t) => {
     const amb = await criarAmbiente();
     t.after(amb.encerrar);
     const jogador = await amb.novoJogador('Reinscrição');
@@ -1341,16 +1364,18 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
     assert.equal((await amb.chamar('POST', `/api/torneios/${campeonatoId}/inscricao`, {
       cookie: jogador.cookie, corpo: {}
     })).status, 201);
+    const original = { ...amb.supabase.tabelas.inscricoes[0] };
     assert.equal((await amb.chamar('DELETE', `/api/torneios/${campeonatoId}/inscricao`, {
       cookie: jogador.cookie
     })).status, 200);
-    assert.equal((await amb.chamar('POST', `/api/torneios/${campeonatoId}/inscricao`, {
+    const reinscricao = await amb.chamar('POST', `/api/torneios/${campeonatoId}/inscricao`, {
       cookie: jogador.cookie, corpo: {}
-    })).status, 201);
-    assert.deepEqual(
-      amb.supabase.tabelas.inscricoes.map((item) => item.status),
-      ['cancelada', 'pendente']
-    );
+    });
+    assert.equal(reinscricao.status, 201);
+    assert.equal(amb.supabase.tabelas.inscricoes.length, 1);
+    assert.equal(amb.supabase.tabelas.inscricoes[0].id, original.id);
+    assert.equal(amb.supabase.tabelas.inscricoes[0].inscrito_em, original.inscrito_em);
+    assert.equal(amb.supabase.tabelas.inscricoes[0].status, 'pendente');
   });
 
   test('inscrição atômica no banco deve proteger a última vaga contra requisições concorrentes', async (t) => {
@@ -1469,6 +1494,164 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
     })).status, 409);
   });
 
+  test('agenda mostra partidas contestadas a administradores que não são participantes', async (t) => {
+    const amb = await criarAmbiente();
+    t.after(amb.encerrar);
+    const admin = await amb.novoJogador('Admin da Arena');
+    const jogador1 = await amb.novoJogador('Jogador da Partida Um');
+    const jogador2 = await amb.novoJogador('Jogador da Partida Dois');
+    const visitante = await amb.novoJogador('Visitante sem vínculo');
+    amb.supabase.tabelas.usuarios.find((item) => item.id === admin.id).perfil = 'admin';
+    const campeonatoId = UUID();
+    const partidaId = UUID();
+    amb.supabase.seed('campeonatos', {
+      id: campeonatoId,
+      nome: 'Campeonato em disputa',
+      criador_id: jogador1.id
+    });
+    amb.supabase.seed('partidas', {
+      id: partidaId,
+      campeonato_id: campeonatoId,
+      jogador_1_id: jogador1.id,
+      jogador_2_id: jogador2.id,
+      status: 'disputada',
+      resultado: null,
+      agendada_para: null,
+      concluida_em: null
+    });
+    amb.supabase.seed('partida_resultados', {
+      partida_id: partidaId,
+      reportado_por: jogador1.id,
+      vencedor_id: jogador1.id,
+      resultado: '2-1',
+      status: 'disputada',
+      contestado_por: jogador2.id,
+      vencedor_contestado_id: jogador2.id,
+      resultado_contestado: '1-2'
+    });
+
+    const agendaAdmin = await amb.chamar('GET', '/api/partidas/agenda', { cookie: admin.cookie });
+    assert.equal(agendaAdmin.status, 200);
+    assert.equal(agendaAdmin.json.partidas.length, 1);
+    assert.equal(agendaAdmin.json.partidas[0].id, partidaId);
+    assert.equal(agendaAdmin.json.partidas[0].resultado.status, 'disputada');
+
+    const agendaVisitante = await amb.chamar('GET', '/api/partidas/agenda', { cookie: visitante.cookie });
+    assert.equal(agendaVisitante.status, 200);
+    assert.equal(agendaVisitante.json.partidas.length, 0);
+  });
+
+  test('empate só é confirmado após os dois jogadores relatarem o mesmo placar', async (t) => {
+    const amb = await criarAmbiente();
+    t.after(amb.encerrar);
+    const jogador1 = await amb.novoJogador('Empatado Um');
+    const jogador2 = await amb.novoJogador('Empatado Dois');
+    const partidaId = UUID();
+    amb.supabase.seed('partidas', {
+      id: partidaId,
+      jogador_1_id: jogador1.id,
+      jogador_2_id: jogador2.id,
+      status: 'em_andamento',
+      concluida_em: null
+    });
+
+    const semNulo = await amb.chamar('POST', `/api/partidas/${partidaId}/resultado`, {
+      cookie: jogador1.cookie,
+      corpo: { vencedor_id: jogador1.id, resultado: '1-1', chave_idempotencia: UUID() }
+    });
+    assert.equal(semNulo.status, 400);
+
+    const primeiroRelato = await amb.chamar('POST', `/api/partidas/${partidaId}/resultado`, {
+      cookie: jogador1.cookie,
+      corpo: { vencedor_id: null, resultado: '1-1', chave_idempotencia: UUID() }
+    });
+    assert.equal(primeiroRelato.status, 200);
+    assert.equal(primeiroRelato.json.resultado.vencedor_id, null);
+    assert.equal(primeiroRelato.json.resultado.status, 'aguardando_confirmacao');
+
+    const segundoRelato = await amb.chamar('POST', `/api/partidas/${partidaId}/resultado`, {
+      cookie: jogador2.cookie,
+      corpo: { vencedor_id: null, resultado: '1-1', chave_idempotencia: UUID() }
+    });
+    assert.equal(segundoRelato.status, 200);
+    assert.equal(segundoRelato.json.resultado.status, 'confirmada');
+    assert.equal(segundoRelato.json.resultado.vencedor_id, null);
+    assert.equal(amb.supabase.tabelas.partidas[0].status, 'concluida');
+    assert.equal(amb.supabase.tabelas.partidas[0].resultado, '1-1');
+    assert.equal(amb.supabase.tabelas.partida_resultados.length, 0);
+    assert.deepEqual(
+      amb.supabase.tabelas.partida_empates.map((item) => item.jogador_id).sort(),
+      [jogador1.id, jogador2.id].sort()
+    );
+    for (const jogador of [jogador1, jogador2]) {
+      const perfil = amb.supabase.tabelas.usuarios.find((item) => item.id === jogador.id);
+      assert.equal(perfil.vitorias, 0);
+      assert.equal(perfil.derrotas, 0);
+    }
+  });
+
+  test('administrador pode resolver contestação como empate com justificativa auditável', async (t) => {
+    const amb = await criarAmbiente();
+    t.after(amb.encerrar);
+    const admin = await amb.novoJogador('Administrador');
+    const jogador1 = await amb.novoJogador('Participante Um');
+    const jogador2 = await amb.novoJogador('Participante Dois');
+    const partidaId = UUID();
+    amb.supabase.tabelas.usuarios.find((item) => item.id === admin.id).perfil = 'admin';
+    amb.supabase.seed('partidas', {
+      id: partidaId,
+      jogador_1_id: jogador1.id,
+      jogador_2_id: jogador2.id,
+      status: 'em_andamento',
+      concluida_em: null
+    });
+
+    assert.equal((await amb.chamar('POST', `/api/partidas/${partidaId}/resultado`, {
+      cookie: jogador1.cookie,
+      corpo: { vencedor_id: jogador1.id, resultado: '2-1', chave_idempotencia: UUID() }
+    })).status, 200);
+    assert.equal((await amb.chamar('POST', `/api/partidas/${partidaId}/resultado`, {
+      cookie: jogador2.cookie,
+      corpo: { vencedor_id: jogador2.id, resultado: '1-2', chave_idempotencia: UUID() }
+    })).status, 200);
+
+    const justificativaAusente = await amb.chamar('POST', `/api/partidas/${partidaId}/resultado/resolver`, {
+      cookie: admin.cookie,
+      corpo: {
+        vencedor_id: null,
+        resultado: '1-1',
+        justificativa: '   ',
+        chave_idempotencia: UUID()
+      }
+    });
+    assert.equal(justificativaAusente.status, 400);
+    assert.equal(amb.supabase.tabelas.partidas[0].status, 'disputada');
+
+    const decisao = await amb.chamar('POST', `/api/partidas/${partidaId}/resultado/resolver`, {
+      cookie: admin.cookie,
+      corpo: {
+        vencedor_id: null,
+        resultado: '1-1',
+        justificativa: 'As evidências disponíveis não permitem atribuir vitória a nenhum participante.',
+        chave_idempotencia: UUID()
+      }
+    });
+    assert.equal(decisao.status, 200);
+    assert.equal(decisao.json.resultado.vencedor_id, null);
+    assert.equal(decisao.json.resultado.resultado, '1-1');
+    assert.equal(decisao.json.resultado.resolvido_por, admin.id);
+    assert.match(decisao.json.resultado.justificativa, /evidências/);
+    assert.equal(amb.supabase.tabelas.partida_empates.length, 2);
+    assert.equal(amb.supabase.tabelas.partidas[0].vencedor_id, null);
+    assert.equal(amb.supabase.tabelas.partidas[0].status, 'concluida');
+    const eventoAdmin = amb.supabase.tabelas.partida_resultado_eventos.find(
+      (item) => item.acao === 'resolvido_admin'
+    );
+    assert.equal(eventoAdmin.ator_id, admin.id);
+    assert.equal(eventoAdmin.dados.resultado, '1-1');
+    assert.match(eventoAdmin.dados.justificativa, /evidências/);
+  });
+
   test('resultado divergente fica pendente de resolução e agenda só pode ser alterada pelo organizador', async (t) => {
     const amb = await criarAmbiente();
     t.after(amb.encerrar);
@@ -1528,21 +1711,49 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
       cookie: jogador2.cookie
     })).json.partidas.length, 0);
     assert.equal(amb.supabase.tabelas.usuarios.find((item) => item.id === jogador1.id).vitorias, 0);
-  });
-  const cadastro = await amb.chamar('POST', '/api/usuarios', {
-    corpo: { nome: 'Teste Bloqueado', email: 'bloqueado@teste.com', senha: 'senha-forte-123' }
-  });
-  assert.equal(cadastro.status, 403);
-  assert.doesNotMatch(cadastro.json.mensagem, /políticas de acesso/i);
 
-  amb.supabase.falharAuth('signInWithPassword', {
-    status: 403,
-    code: 'user_banned',
-    message: 'User is banned'
+    const decisaoSemAdmin = await amb.chamar('POST', `/api/partidas/${partidaId}/resultado/resolver`, {
+      cookie: jogador1.cookie,
+      corpo: {
+        vencedor_id: jogador2.id,
+        resultado: '1-2',
+        justificativa: 'Decisão de teste',
+        chave_idempotencia: UUID()
+      }
+    });
+    assert.equal(decisaoSemAdmin.status, 403);
+
+    amb.supabase.tabelas.usuarios.find((item) => item.id === organizador.id).perfil = 'admin';
+    const chaveAdmin = UUID();
+    const decisao = await amb.chamar('POST', `/api/partidas/${partidaId}/resultado/resolver`, {
+      cookie: organizador.cookie,
+      corpo: {
+        vencedor_id: jogador2.id,
+        resultado: '1-2',
+        justificativa: 'O relato do segundo participante foi confirmado pelas evidências.',
+        chave_idempotencia: chaveAdmin
+      }
+    });
+    assert.equal(decisao.status, 200);
+    assert.equal(decisao.json.resultado.status, 'confirmada');
+    assert.equal(decisao.json.resultado.vencedor_id, jogador2.id);
+    assert.equal(decisao.json.resultado.resolvido_por, organizador.id);
+    assert.match(decisao.json.resultado.justificativa, /evidências/);
+    assert.equal(amb.supabase.tabelas.partidas[0].status, 'concluida');
+    assert.equal(amb.supabase.tabelas.partidas[0].resultado, '1-2');
+    assert.equal(amb.supabase.tabelas.partida_resultados.length, 0);
+    assert.equal(amb.supabase.tabelas.usuarios.find((item) => item.id === jogador2.id).vitorias, 1);
+    assert.equal(amb.supabase.tabelas.usuarios.find((item) => item.id === jogador1.id).derrotas, 1);
+
+    const repetida = await amb.chamar('POST', `/api/partidas/${partidaId}/resultado/resolver`, {
+      cookie: organizador.cookie,
+      corpo: {
+        vencedor_id: jogador2.id,
+        resultado: '1-2',
+        justificativa: 'O relato do segundo participante foi confirmado pelas evidências.',
+        chave_idempotencia: chaveAdmin
+      }
+    });
+    assert.equal(repetida.status, 200);
   });
-  const login = await amb.chamar('POST', '/api/login', {
-    corpo: { email: 'bloqueado@teste.com', senha: 'senha-forte-123' }
-  });
-  assert.equal(login.status, 403);
-  assert.doesNotMatch(login.json.mensagem, /políticas de acesso/i);
-});
+

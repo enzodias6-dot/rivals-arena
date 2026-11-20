@@ -1,0 +1,33 @@
+name: Validar Rivals Arena
+
+on:
+  push:
+    branches:
+      - main
+      - feat/revisao-campeonatos-partidas-perfil
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validar:
+    name: Testes e verificações
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Executar verificações e testes
+        run: npm test

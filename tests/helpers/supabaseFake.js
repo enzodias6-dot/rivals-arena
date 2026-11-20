@@ -26,7 +26,8 @@ function criarSupabaseFake({
     solicitacoes_time: [],
     arsenal_itens: [],
     partida_resultados: [],
-    partida_resultado_eventos: []
+    partida_resultado_eventos: [],
+    partida_empates: []
   };
   const tokens = new Map();
   const refreshTokens = new Map();
@@ -319,8 +320,7 @@ function criarSupabaseFake({
         ...(this.tabela === 'desafios' ? { data_criacao: new Date().toISOString(), status: 'pendente' } : {})
       }));
       if (this.tabela === 'inscricoes' && rows.some((nova) => tabelas.inscricoes.some((atual) =>
-        atual.campeonato_id === nova.campeonato_id && atual.jogador_id === nova.jogador_id &&
-        ['pendente', 'aprovada'].includes(atual.status)
+        atual.campeonato_id === nova.campeonato_id && atual.jogador_id === nova.jogador_id
       ))) {
         return { data: null, error: respostaErro('23505', 'duplicate key value violates unique constraint', 409) };
       }
@@ -365,9 +365,10 @@ function criarSupabaseFake({
     atualizar(rows) {
       const alteradas = rows.filter((linha) => {
         if (this.tabela === 'inscricoes') {
-          return linha.jogador_id === this.usuarioId &&
-            ['pendente', 'aprovada'].includes(linha.status) &&
-            this.payload.status === 'cancelada';
+          return linha.jogador_id === this.usuarioId && (
+            (['pendente', 'aprovada'].includes(linha.status) && this.payload.status === 'cancelada') ||
+            (linha.status === 'cancelada' && this.payload.status === 'pendente')
+          );
         }
         return this.tabela !== 'desafios' || linha.desafiado_id === this.usuarioId;
       });
@@ -440,13 +441,15 @@ function criarSupabaseFake({
         if (![partida.jogador_1_id, partida.jogador_2_id].includes(usuarioId)) {
           return Promise.resolve(falha('42501', 'match_participant_required', 403));
         }
-        if (![partida.jogador_1_id, partida.jogador_2_id].includes(dados.vencedor_id)) {
+        if (dados.vencedor_id !== null &&
+            ![partida.jogador_1_id, partida.jogador_2_id].includes(dados.vencedor_id)) {
           return Promise.resolve(falha('22023', 'winner_must_be_participant'));
         }
-        const [pontosJogador1, pontosJogador2] = dados.resultado.split('-').map(Number);
-        const vencedorPeloPlacar = pontosJogador1 > pontosJogador2
-          ? partida.jogador_1_id : partida.jogador_2_id;
-        if (pontosJogador1 === pontosJogador2 || dados.vencedor_id !== vencedorPeloPlacar) {
+        const [pontosJogador1, pontosJogador2] = dados.resultado.split('-').map(BigInt);
+        const vencedorPeloPlacar = pontosJogador1 === pontosJogador2
+          ? null
+          : pontosJogador1 > pontosJogador2 ? partida.jogador_1_id : partida.jogador_2_id;
+        if (dados.vencedor_id !== vencedorPeloPlacar) {
           return Promise.resolve(falha('22023', 'score_winner_mismatch'));
         }
         if (['concluida', 'cancelada'].includes(partida.status) || partida.concluida_em) {
@@ -491,12 +494,23 @@ function criarSupabaseFake({
           partida.vencedor_id = dados.vencedor_id;
           partida.resultado = dados.resultado;
           partida.concluida_em = new Date().toISOString();
-          const perdedorId = partida.jogador_1_id === dados.vencedor_id
-            ? partida.jogador_2_id : partida.jogador_1_id;
-          const perfilVencedor = tabelas.usuarios.find((item) => item.id === dados.vencedor_id);
-          const perfilPerdedor = tabelas.usuarios.find((item) => item.id === perdedorId);
-          if (perfilVencedor) perfilVencedor.vitorias += 1;
-          if (perfilPerdedor) perfilPerdedor.derrotas += 1;
+          if (dados.vencedor_id === null) {
+            tabelas.partida_empates.push(
+              { partida_id: partidaId, jogador_id: partida.jogador_1_id },
+              { partida_id: partidaId, jogador_id: partida.jogador_2_id }
+            );
+            for (const jogadorId of [partida.jogador_1_id, partida.jogador_2_id]) {
+              const perfil = tabelas.usuarios.find((item) => item.id === jogadorId);
+              if (perfil && Object.hasOwn(perfil, 'empates')) perfil.empates += 1;
+            }
+          } else {
+            const perdedorId = partida.jogador_1_id === dados.vencedor_id
+              ? partida.jogador_2_id : partida.jogador_1_id;
+            const perfilVencedor = tabelas.usuarios.find((item) => item.id === dados.vencedor_id);
+            const perfilPerdedor = tabelas.usuarios.find((item) => item.id === perdedorId);
+            if (perfilVencedor) perfilVencedor.vitorias += 1;
+            if (perfilPerdedor) perfilPerdedor.derrotas += 1;
+          }
           tabelas.partida_resultados.splice(tabelas.partida_resultados.indexOf(resultado), 1);
           acao = 'confirmado';
         } else {
@@ -541,17 +555,126 @@ function criarSupabaseFake({
         partida.vencedor_id = resultado.vencedor_id;
         partida.resultado = resultado.resultado;
         partida.concluida_em = new Date().toISOString();
-        const perdedorId = partida.jogador_1_id === resultado.vencedor_id
-          ? partida.jogador_2_id : partida.jogador_1_id;
-        const perfilVencedor = tabelas.usuarios.find((item) => item.id === resultado.vencedor_id);
-        const perfilPerdedor = tabelas.usuarios.find((item) => item.id === perdedorId);
-        if (perfilVencedor) perfilVencedor.vitorias += 1;
-        if (perfilPerdedor) perfilPerdedor.derrotas += 1;
+        if (resultado.vencedor_id === null) {
+          tabelas.partida_empates.push(
+            { partida_id: partidaId, jogador_id: partida.jogador_1_id },
+            { partida_id: partidaId, jogador_id: partida.jogador_2_id }
+          );
+          for (const jogadorId of [partida.jogador_1_id, partida.jogador_2_id]) {
+            const perfil = tabelas.usuarios.find((item) => item.id === jogadorId);
+            if (perfil && Object.hasOwn(perfil, 'empates')) perfil.empates += 1;
+          }
+        } else {
+          const perdedorId = partida.jogador_1_id === resultado.vencedor_id
+            ? partida.jogador_2_id : partida.jogador_1_id;
+          const perfilVencedor = tabelas.usuarios.find((item) => item.id === resultado.vencedor_id);
+          const perfilPerdedor = tabelas.usuarios.find((item) => item.id === perdedorId);
+          if (perfilVencedor) perfilVencedor.vitorias += 1;
+          if (perfilPerdedor) perfilPerdedor.derrotas += 1;
+        }
         tabelas.partida_resultados.splice(tabelas.partida_resultados.indexOf(resultado), 1);
         eventosResultado.set(chave, {
           atorId: usuarioId, partidaId, acao: 'confirmado', dados: {}
         });
         return Promise.resolve({ data: resultadoAtual(partidaId), error: null });
+      }
+      case 'resolver_resultado_partida': {
+        const partidaId = parametros.p_partida_id;
+        const chave = parametros.p_chave_idempotencia;
+        const admin = tabelas.usuarios.find((item) => item.id === usuarioId);
+        if (admin?.perfil !== 'admin') {
+          return Promise.resolve(falha('42501', 'administrator_required', 403));
+        }
+        const dados = {
+          operacao: 'resolver_admin',
+          vencedor_id: parametros.p_vencedor_id,
+          resultado: parametros.p_resultado,
+          justificativa: parametros.p_justificativa
+        };
+        const eventoExistente = eventosResultado.get(chave);
+        if (eventoExistente) {
+          if (eventoExistente.atorId !== usuarioId ||
+              eventoExistente.partidaId !== partidaId ||
+              eventoExistente.acao !== 'resolvido_admin' ||
+              !isDeepStrictEqual(eventoExistente.dados, dados)) {
+            return Promise.resolve(falha('23505', 'idempotency_key_reused', 409));
+          }
+          const partidaConcluida = resultadoAtual(partidaId);
+          return Promise.resolve({
+            data: {
+              ...partidaConcluida,
+              resolvido_por: usuarioId,
+              justificativa: dados.justificativa
+            },
+            error: null
+          });
+        }
+        const partida = tabelas.partidas.find((item) => item.id === partidaId);
+        const resultado = tabelas.partida_resultados.find((item) => item.partida_id === partidaId);
+        if (!partida || !resultado) {
+          return Promise.resolve(falha('P0002', 'match_not_found', 404));
+        }
+        if (partida.status !== 'disputada' || resultado.status !== 'disputada') {
+          return Promise.resolve(falha('P0001', 'result_not_disputed', 409));
+        }
+        if (!parametros.p_justificativa?.trim() || parametros.p_justificativa.trim().length > 1000) {
+          return Promise.resolve(falha('22023', 'invalid_admin_resolution_payload'));
+        }
+        if (parametros.p_vencedor_id !== null &&
+            ![partida.jogador_1_id, partida.jogador_2_id].includes(parametros.p_vencedor_id)) {
+          return Promise.resolve(falha('22023', 'winner_must_be_participant'));
+        }
+        const [p1, p2] = parametros.p_resultado.split('-').map(BigInt);
+        const vencedorPlacar = p1 === p2 ? null : p1 > p2 ? partida.jogador_1_id : partida.jogador_2_id;
+        if (vencedorPlacar !== parametros.p_vencedor_id) {
+          return Promise.resolve(falha('22023', 'score_winner_mismatch'));
+        }
+        partida.status = 'concluida';
+        partida.vencedor_id = parametros.p_vencedor_id;
+        partida.resultado = parametros.p_resultado;
+        partida.concluida_em = new Date().toISOString();
+        if (parametros.p_vencedor_id === null) {
+          tabelas.partida_empates.push(
+            { partida_id: partidaId, jogador_id: partida.jogador_1_id },
+            { partida_id: partidaId, jogador_id: partida.jogador_2_id }
+          );
+          for (const jogadorId of [partida.jogador_1_id, partida.jogador_2_id]) {
+            const perfil = tabelas.usuarios.find((item) => item.id === jogadorId);
+            if (perfil && Object.hasOwn(perfil, 'empates')) perfil.empates += 1;
+          }
+        } else {
+          const perdedorId = partida.jogador_1_id === parametros.p_vencedor_id
+            ? partida.jogador_2_id : partida.jogador_1_id;
+          const vencedor = tabelas.usuarios.find((item) => item.id === parametros.p_vencedor_id);
+          const perdedor = tabelas.usuarios.find((item) => item.id === perdedorId);
+          if (vencedor) vencedor.vitorias += 1;
+          if (perdedor) perdedor.derrotas += 1;
+        }
+        tabelas.partida_resultados.splice(tabelas.partida_resultados.indexOf(resultado), 1);
+        eventosResultado.set(chave, {
+          atorId: usuarioId,
+          partidaId,
+          acao: 'resolvido_admin',
+          dados
+        });
+        tabelas.partida_resultado_eventos.push({
+          id: randomUUID(),
+          partida_id: partidaId,
+          ator_id: usuarioId,
+          chave_idempotencia: chave,
+          acao: 'resolvido_admin',
+          dados: { ...dados },
+          criado_em: new Date().toISOString()
+        });
+        const resposta = resultadoAtual(partidaId);
+        return Promise.resolve({
+          data: {
+            ...resposta,
+            resolvido_por: usuarioId,
+            justificativa: parametros.p_justificativa.trim()
+          },
+          error: null
+        });
       }
       case 'agendar_partida': {
         const partida = tabelas.partidas.find((item) => item.id === parametros.p_partida_id);

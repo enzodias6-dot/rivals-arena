@@ -67,13 +67,15 @@
   obterUsuario()
     .then((usuario) => {
       usuarioAtual = usuario;
-      const partidas = usuario.vitorias + usuario.derrotas;
+      const empates = Number(usuario.empates) || 0;
+      const partidas = usuario.vitorias + usuario.derrotas + empates;
 
       [
         ['Perfil', usuario.perfil || '—'],
         ['Nível', usuario.nivel ?? '—'],
         ['Vitórias', usuario.vitorias],
         ['Derrotas', usuario.derrotas],
+        ['Empates', empates],
         ['Partidas', partidas],
         ['Pontos', formatarNumero(usuario.pontos)],
         ['Posição', usuario.posicao ? `#${usuario.posicao}` : '—'],

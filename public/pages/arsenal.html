@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#080a0f">
-  <meta name="description" content="Consulte itens publicados no catálogo da Rivals Arena.">
+  <meta name="description" content="Escolha seu estilo de combate no Arsenal Rivals Arena.">
   <title>Arsenal | Rivals Arena</title>
   <link rel="icon" type="image/png" href="../img/logo.png">
   <link rel="stylesheet" href="../css/fonte-titulos.css">
@@ -12,29 +12,21 @@
 </head>
 <body data-page="arsenal">
   <header id="hdr" class="site-header"></header>
-  <main>
-    <section class="page-header">
-
-      <h1>Arsenal</h1>
+  <main class="arsenal-game">
+    <section class="arsenal-game-heading">
+      <p class="arsenal-kicker">RIVALS ARENA / EQUIPAMENTOS</p>
+      <h1>ESCOLHA SEU ESTILO<span>.</span></h1>
+      <p>Três armas. Três formas de dominar a arena.</p>
     </section>
-
-    <section class="section page-content">
-      <p class="meta" role="note">O catálogo apresenta apenas itens reais publicados no banco. Nenhum item fictício é exibido.</p>
-      <div class="panel arsenal-filters">
-        <label for="arsenal-search">Buscar item</label>
-        <input id="arsenal-search" type="search" autocomplete="off">
-        <label for="arsenal-category">Categoria</label>
-        <select id="arsenal-category">
-          <option value="">Todas</option>
-        </select>
-      </div>
-      <p id="arsenal-status" role="status" aria-live="polite">Carregando catálogo...</p>
-      <div class="arsenal" id="arsenal"></div>
-      <article id="arsenal-detail" class="panel" aria-live="polite" hidden></article>
+    <section class="arsenal-game-grid" id="arsenal" aria-label="Armas disponíveis">
+      <p id="arsenal-status" class="arsenal-status" role="status" aria-live="polite">Carregando arsenal...</p>
     </section>
+    <div class="arsenal-game-footer">
+      <a class="arsenal-back" href="../index.html">VOLTAR AO MENU PRINCIPAL <span aria-hidden="true">←</span></a>
+      <span class="arsenal-footnote">RIVALS ARENA · SELEÇÃO DE EQUIPAMENTO</span>
+    </div>
   </main>
-
-  <footer>© 2026 Rivals Arena — Projeto Acadêmico.</footer>
+  <footer class="arsenal-site-footer">© 2026 Rivals Arena — Projeto Acadêmico.</footer>
   <script src="../js/comum.js"></script>
   <script src="../js/arsenal.js"></script>
 </body>

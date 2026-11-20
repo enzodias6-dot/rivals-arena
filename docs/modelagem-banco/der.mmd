@@ -1,0 +1,14 @@
+erDiagram
+  AUTH_USERS ||--|| USUARIOS : "identidade/perfil"
+  USUARIOS ||--o{ CAMPEONATOS : cria
+  USUARIOS ||--o{ INSCRICOES : realiza
+  CAMPEONATOS ||--o{ INSCRICOES : recebe
+  CAMPEONATOS ||--o{ PARTIDAS : contem
+  USUARIOS ||--o{ PARTIDAS : jogador_1
+  USUARIOS ||--o{ PARTIDAS : jogador_2
+  USUARIOS o|--o{ PARTIDAS : vencedor
+  USUARIOS ||--o{ DESAFIOS : desafiante
+  USUARIOS ||--o{ DESAFIOS : desafiado
+  PARTIDAS o|--o{ DESAFIOS : vincula
+  USUARIOS ||--o{ MEMBROS_TIME : participa
+  TIMES ||--o{ MEMBROS_TIME : possui

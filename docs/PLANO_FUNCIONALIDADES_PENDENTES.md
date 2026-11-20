@@ -45,7 +45,7 @@ Cria tabela nova com RLS e leitura de itens publicados por `authenticated`; não
 
 Foi alinhada ao resultado real: placar textual numérico, `partidas.resultado` continua canônico, e a proposta não exige JSONB nessa coluna. Uma tabela `partida_resultados` (nova, transitória) recebe relato/contestação; após confirmação, o staging é removido e `partidas.resultado` é atualizado. O ledger de eventos fornece idempotência/auditoria, não uma fonte alternativa do resultado final.
 
-As funções validam ator/participantes, exigem confirmação do adversário, aceitam somente placar sem empate e em ordem `jogador_1-jogador_2`, recusam divergências por usuário e atualizam vitórias/derrotas na confirmação. Repetição usa chave idempotente. IVI não é calculado ou ativado por essas funções.
+As funções validam ator/participantes e exigem confirmação do adversário. Placar empatado só é confirmado após relato/aceite dos dois jogadores; a confirmação gera um registro de empate para cada participante. Divergências permanecem contestadas até resolução administrativa. O administrador pode escolher qualquer relato ou definir terceiro resultado, sempre com justificativa obrigatória e evento de auditoria contendo administrador, resultado final e justificativa. Repetição usa chave idempotente. Nenhuma pontuação é atribuída por empate enquanto a regra de pontos não for aprovada. IVI não é calculado ou ativado por essas funções.
 
 Ainda confirmar colunas/tipos de `partidas`, `usuarios`, `campeonatos`, definição exata/limites da constraint de resultado, status e dados históricos, policies/grants/owners e efeitos do backfill. As funções são `SECURITY DEFINER`, `search_path=''`, verificam `auth.uid()` e concedem execução a `authenticated`; owner e RLS efetivos continuam pendentes.
 
@@ -55,9 +55,9 @@ Ver classificações, ordem e riscos em [AUDITORIA_FINAL_SUPABASE.md](./AUDITORI
 
 - Resultado final e histórico continuam em `partidas.resultado` (`VARCHAR`, formato exigido pelo banco).
 - O placar submetido representa, nesta proposta, pontos de `jogador_1_id` e depois de `jogador_2_id`; o vencedor informado precisa corresponder ao placar.
-- Não se aceita empate no fluxo proposto. Essa regra e os limites numéricos devem ser aprovados.
-- Antes da confirmação há um estado transitório de relato/contestação. Só a confirmação final altera o campo canônico e as estatísticas.
-- Divergência permanece pendente de resolução autorizada. Não existe papel administrativo de resolução definido.
+- Empate é permitido, mas exige confirmação dos dois jogadores; quando confirmado, gera um registro para cada jogador. A pontuação dos empates ainda não foi definida.
+- Antes da confirmação há um estado transitório de relato/contestação. Só a confirmação final ou a resolução administrativa altera o resultado canônico e as estatísticas.
+- Em contestação, administrador pode escolher qualquer relato ou definir terceiro resultado; justificativa obrigatória e auditoria da decisão.
 - O IVI permanece desligado; não alterar `pontos` nem a view de ranking.
 
 ## Times
@@ -98,4 +98,4 @@ Arquitetura: cliente do jogo → servidor confiável do jogo → API Rivals Aren
 
 Os testes locais simulados validam lógica e contratos do código, não o banco remoto, suas policies, triggers, locks ou grants.
 
-Na revisão de compatibilidade atual, `npm test` passou com 55/55 testes; verificou sintaxe em 39/39 arquivos JavaScript e integridade de links/arquivos/IDs em 8 páginas HTML. `git diff --check HEAD` também passou. Isso não substitui homologação com Supabase real.
+Na execução mais recente registrada pela equipe no Codespace, `npm ci` concluiu sem vulnerabilidades reportadas e `npm test` passou com 59/59 testes; `npm run check` verificou sintaxe em 39/39 arquivos JavaScript e 8 páginas HTML. Esses resultados são evidência daquela execução, não uma nova execução feita por esta atualização documental. Testes simulados não substituem homologação com Supabase real.

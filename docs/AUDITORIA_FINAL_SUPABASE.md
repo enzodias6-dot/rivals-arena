@@ -51,20 +51,20 @@ Os rótulos abaixo medem compatibilidade com as evidências disponíveis; **“C
 
 ### `database/migrations/20261120_proposta_inscricao_atomica_reinscricao.sql` — **BLOQUEADA POR INFORMAÇÕES**
 
-- A constraint e o par de colunas que a equipe informou correspondem ao objeto que a proposta pretende substituir. O preflight agora exige especificamente `inscricoes_campeonato_id_jogador_id_key` do tipo `UNIQUE`, com exatamente essas duas colunas.
-- A proposta bloqueia se houver outra constraint única equivalente, índice standalone equivalente, dependência de FK, índice de destino já existente ou inscrição ativa duplicada. Não usa `DROP INDEX`, `CASCADE` nem remove índices por semelhança. A remoção da constraint também remove apenas seu índice de suporte pertencente à própria constraint.
-- Na transação, a unicidade global é substituída por índice parcial de inscrições ativas; linhas canceladas permanecem e uma reinscrição cria outra linha. O trigger serializa inscrições por campeonato e a rota continua fazendo pré-contagem REST apenas para UX.
-- Ainda faltam tipos/constraints/statuses completos, dados e dependências reais, grants/owners e policies RLS. A remoção pode falhar se a estrutura divergir; a migração inteira está em transação e não usa `CASCADE`.
-- Rollback depois de aceitar reinscrições não é uma reversão simples: a constraint global anterior não pode ser recriada se houver mais de uma linha histórica para algum par. Preservar todas as linhas; avaliar o estado dos dados antes de decidir qualquer rollback. Não aplicar antes da homologação e da decisão sobre histórico.
+- A proposta mantém a UNIQUE global `inscricoes_campeonato_id_jogador_id_key`; exige que ela exista no preflight e não remove constraints/índices.
+- Reinscrição é UPDATE da mesma linha cancelada para pendente, preservando ID e `inscrito_em`. O trigger protege ID, campeonato, jogador e data original; redefine a data apenas na inscrição inicial, serializa por campeonato e revalida capacidade.
+- Na reativação, o trigger exclui a própria inscrição da contagem de vagas e verifica novamente se o campeonato está aberto. A rota mantém uma pré-contagem para UX; a proteção definitiva está no PostgreSQL.
+- A proposta ainda depende de confirmar tipos/colunas, grants, policies RLS, owners e concorrência em homologação. A UNIQUE global reduz o histórico a uma linha por par campeonato/jogador; isso é intencional para cumprir a regra aprovada de preservar a mesma inscrição.
 
 ### `database/migrations/20261120_proposta_partidas_resultados_ivi.sql` — **BLOQUEADA POR INFORMAÇÕES**
 
-- A incompatibilidade JSONB foi corrigida: o preflight exige `partidas.resultado` textual; funções recebem placar como texto, por exemplo `2-1`, e não alteram nem substituem a constraint real. O placar é interpretado na ordem `jogador_1_id-jogador_2_id`; empate não é aceito e vencedor precisa corresponder ao placar.
-- `partidas.resultado` é a única fonte canônica do resultado confirmado e do histórico legado. `partida_resultados` (não existente no inventário) é proposta como armazenamento transitório de relatos/contestações; a linha é removida ao confirmar. `partida_resultado_eventos` mantém idempotência e auditoria, sem controlar o resultado final. O histórico consulta `partidas.resultado`.
-- As funções propostas validam `auth.uid()`, participação e vencedor, usam `SECURITY DEFINER` com `search_path = ''` e concedem `EXECUTE` a `authenticated`. Confirmação requer o adversário; chamadas repetidas com a mesma chave são idempotentes; divergência fica pendente e não atualiza estatísticas.
-- O preflight exige outros campos/tipos de `partidas`, `usuarios` e `campeonatos` não documentados no inventário. Também bloqueia CHECK existente sobre `partidas.status` para impedir incompatibilidade silenciosa, mas o mapeamento de status, limite de caracteres do `VARCHAR`, constraint de placar e dados legados precisam ser conferidos. A proposta faz backfill de `status`; revisar seu efeito sobre partidas históricas antes de aprovação.
-- A migração cria staging, eventos, estruturas IVI vazias e índices; não cria partidas, não altera `pontos` e não ativa IVI. RLS nas tabelas novas não substitui as policies necessárias de leitura em `partidas`, `campeonatos`, `usuarios` e views. O owner efetivo das funções `SECURITY DEFINER` não foi fornecido.
-- A migração remove apenas DML direto de `anon` em `partidas` e `usuarios`; privilégios herdados de `PUBLIC` podem continuar efetivos. Não altera os grants de escrita de `authenticated` em `usuarios`, pois a edição do nome usa essa tabela. Inspecionar ACLs efetivas e escritores externos antes de aplicar.
+- A incompatibilidade JSONB foi corrigida: o preflight exige `partidas.resultado` textual; funções recebem placar como texto, por exemplo `2-1`, e não alteram nem substituem a constraint real. O placar é interpretado na ordem `jogador_1_id-jogador_2_id`; empate é aceito somente com `vencedor_id = null` e relatos/confirmação compatíveis dos dois jogadores.
+- `partidas.resultado` é a única fonte canônica do resultado confirmado e do histórico legado. `partida_resultados` é armazenamento transitório de relatos/contestações; a linha é removida ao confirmar. `partida_resultado_eventos` mantém idempotência e auditoria. Empates confirmados também geram duas linhas em `partida_empates`; o perfil conta esses registros sem presumir que `usuarios.empates` exista. Nenhum ponto é concedido por empate até aprovação de regra.
+- As funções propostas validam `auth.uid()`, participação e coerência entre placar e vencedor, usam `SECURITY DEFINER` com `search_path = ''` e concedem `EXECUTE` a `authenticated`. Confirmação requer o adversário; chamadas repetidas com a mesma chave são idempotentes; divergência fica pendente e não atualiza estatísticas.
+- Um administrador, verificado diretamente por `usuarios.perfil = 'admin'` na RPC, pode escolher um dos relatos ou um terceiro resultado. A justificativa é obrigatória e o evento de auditoria registra o ator, o resultado escolhido e a justificativa.
+- O preflight exige outros campos/tipos de `partidas`, `usuarios` e `campeonatos` não documentados no inventário. Também bloqueia CHECK existente sobre `partidas.status`, mas o mapeamento de status, limite de caracteres do `VARCHAR`, constraint de placar e dados legados precisam ser conferidos. A proposta faz backfill de `status`; revisar seu efeito sobre partidas históricas antes de aprovação.
+- A migração cria staging, eventos, estrutura de empates, estruturas IVI vazias e índices; não cria partidas, não altera `pontos` e não ativa IVI. RLS nas tabelas novas não substitui as policies necessárias de leitura em `partidas`, `campeonatos`, `usuarios` e views. O owner efetivo das funções `SECURITY DEFINER` não foi fornecido.
+- A proposta revoga UPDATE de tabela em `usuarios` para `PUBLIC`, `anon` e `authenticated`, concedendo a `authenticated` somente UPDATE da coluna `nome`. A verificação de admin ocorre dentro da RPC. Ainda é necessário auditar grants efetivos, policies RLS, owners e escritores externos antes de aplicar.
 - Não aplicar até conferir as estruturas/ACLs faltantes e testar em homologação. O IVI permanece desligado.
 
 ## 3. Problemas encontrados
@@ -93,7 +93,7 @@ Os rótulos abaixo medem compatibilidade com as evidências disponíveis; **“C
 - Obter definição/owner/grants das três views, funções existentes, políticas RLS por operação e ACLs diretas e herdadas para `anon`, `authenticated` e `PUBLIC`.
 - Obter definição e privilégios da função associada ao trigger de cadastro.
 - Definir o processo de publicação do Arsenal e quem poderá publicar; não conceder escrita ao cliente sem decisão.
-- Definir resolução de disputas, empates, limite/formato do placar e estados de partidas; IVI continua sem ativação até aprovação.
+- A regra funcional de empates e resolução administrativa foi aprovada e está refletida na proposta: empate requer confirmação dos dois jogadores; a confirmação registra um empate para cada jogador; contestação pode ser resolvida pelo administrador escolhendo um relato ou definindo terceiro resultado, com justificativa e auditoria obrigatórias. Permanecem pendentes homologação do limite/formato do placar, estados de partidas, políticas/grants reais e definição de pontuação para empate. IVI continua sem ativação até aprovação de fórmula.
 
 ## 5. Riscos
 
@@ -136,7 +136,7 @@ Os rótulos abaixo medem compatibilidade com as evidências disponíveis; **“C
 - Executar `npm test`, sintaxe JavaScript, verificação de HTML/links/IDs e `git diff --check HEAD`.
 - Com usuários reais de teste no projeto isolado de homologação, testar Auth/trigger, perfil e renovação de sessão.
 - Testar anon, jogador próprio, outro jogador, organizador e usuário sem vínculo em cada operação RLS, view e função.
-- Testar resultado com placar aceito pela constraint, vencedor coerente com a ordem dos jogadores, formato inválido, empate, relato, confirmação adversária, contestação divergente, repetição idempotente e histórico após confirmação.
+- Testar resultado com placar aceito pela constraint, vencedor coerente com a ordem dos jogadores, formato inválido, empate relatado/confirmado por ambos, contestação divergente, resolução admin (relato A, relato B e terceiro resultado), justificativa obrigatória, bloqueio de não-admin, repetição idempotente e histórico após confirmação.
 - Confirmar que tentativa de participante não autorizado, não participante, vencedor externo e edição de partida finalizada falha, sem atualizar estatísticas ou gerar duplicidade.
 - Testar inscrição concorrente na última vaga; cancelamento e reinscrição preservando ambas as linhas; tentativa duplicada; status inesperado; e policies com visibilidade parcial.
 - Testar queries do Arsenal sem registros publicados e após publicação autorizada.
@@ -145,7 +145,8 @@ Os rótulos abaixo medem compatibilidade com as evidências disponíveis; **“C
 
 ## 9. Decisões pendentes da equipe
 
-- Quais status e limites de placar são oficiais; se empate é permitido; quem resolve divergências.
+- Status oficiais, limites numéricos e formato máximo de placar aceitos pelo schema real.
+- Pontuação concedida por empate; a regra de confirmação e o registro de um empate por jogador já foram aprovados.
 - Regras de times: capacidade, um ou múltiplos times por jogador, saída/liderança e regras de visibilidade.
 - Processo/role responsável por cadastrar e publicar Arsenal.
 - Fórmula IVI, parâmetros, partidas elegíveis, arredondamento e momento de ativação.
@@ -157,14 +158,14 @@ Os rótulos abaixo medem compatibilidade com as evidências disponíveis; **“C
 
 **O projeto ainda não está pronto para aplicação das migrações em produção nem para declarar integração real.** O inventário confirmou correções importantes — especialmente o `VARCHAR` de resultado, a constraint de inscrição e as tabelas de Times existentes — mas não trouxe o schema detalhado, policies, ACLs, owners, views ou corpo da função de cadastro.
 
-**Validação local desta revisão:** `npm test` passou com 55/55 testes; `npm run check` confirmou sintaxe em 39/39 arquivos JavaScript e integridade de links/arquivos/IDs em 8 páginas HTML; `git diff --check HEAD` passou. Os testes de API usam Supabase simulado e os testes de migração inspecionam SQL estaticamente; nenhum deles executa ou comprova o banco real.
+**Validação desta revisão documental:** não foram executados testes nesta atualização remota. Na execução mais recente registrada pela equipe no Codespace, `npm ci` concluiu sem vulnerabilidades reportadas e `npm test` passou com 59/59 testes; `npm run check` verificou sintaxe em 39/39 arquivos JavaScript e 8 páginas HTML. Essa execução antecede as alterações documentais desta revisão. Executar novamente `npm test` e `git diff --check` no Codespace antes de aprovar o PR. Os testes de API usam Supabase simulado e os testes de migração inspecionam SQL estaticamente; nenhum deles executa ou comprova o banco real.
 
 | Migração | Classificação | Motivo principal |
 |---|---|---|
 | `20261119_inscricao_atomica.sql` | **PRECISA DE CORREÇÕES** | Não integrada à rota; RLS pode limitar a contagem; não resolve a constraint global para reinscrição. |
 | `20261120_proposta_times.sql` | **BLOQUEADA POR INFORMAÇÕES** | Tabelas-alvo já existem; schema e policies reais ausentes; falta `solicitacoes_time`. |
 | `20261120_proposta_arsenal.sql` | **COMPATÍVEL COM O SCHEMA REAL** | A tabela não existe e a proposta é aditiva; aprovação editorial e homologação ainda necessárias. |
-| `20261120_proposta_inscricao_atomica_reinscricao.sql` | **BLOQUEADA POR INFORMAÇÕES** | Constraint conhecida, mas faltam dependências/catalogo completo, RLS/grants e homologação. |
-| `20261120_proposta_partidas_resultados_ivi.sql` | **BLOQUEADA POR INFORMAÇÕES** | Resultado textual alinhado; faltam colunas/status/checks restantes, RLS, grants, owner e revisão do backfill. |
+| `20261120_proposta_inscricao_atomica_reinscricao.sql` | **BLOQUEADA POR INFORMAÇÕES** | Preserva a UNIQUE global e reativa a mesma linha; faltam tipos/colunas completos, RLS/grants e homologação. |
+| `20261120_proposta_partidas_resultados_ivi.sql` | **BLOQUEADA POR INFORMAÇÕES** | Empate e decisão admin propostos; faltam colunas/status/checks restantes, RLS, grants, owner e revisão do backfill. |
 
 O que falta para iniciar integração real: receber o inventário detalhado descrito nas seções 1 e 6, preparar homologação isolada, aprovar as regras pendentes e revisar cada migração com esse catálogo. Não acessar produção nem executar as propostas antes disso.
