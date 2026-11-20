@@ -101,7 +101,15 @@ begin
     if v_tipo not in ('text', 'varchar') then
       raise exception 'public.partidas.status deve ser text/varchar para esta proposta.';
     end if;
-    -- A restrição antiga será substituída nesta própria transação.
+    if exists (
+      select 1 from pg_catalog.pg_constraint as c
+       where c.conrelid = 'public.partidas'::regclass
+         and c.contype = 'c'
+         and v_status_attnum = any(c.conkey)
+         and c.conname <> 'partidas_status_check'
+    ) then
+      raise exception 'Existe CHECK adicional sobre partidas.status; revise-o manualmente antes da migração.';
+    end if;
     execute $query$
       select exists (
         select 1 from public.partidas
@@ -232,9 +240,7 @@ begin
       from pg_catalog.pg_constraint as c
      where c.conrelid = 'public.partidas'::regclass
        and c.contype = 'c'
-       and (select a.attnum from pg_catalog.pg_attribute as a
-             where a.attrelid = c.conrelid and a.attname = 'status'
-               and not a.attisdropped) = any(c.conkey)
+       and c.conname = 'partidas_status_check'
   loop
     execute pg_catalog.format('alter table public.partidas drop constraint %I', v_restricao.conname);
   end loop;
@@ -972,6 +978,24 @@ begin
   return v_partida;
 end
 $function$;
+
+-- As views públicas expõem somente campos de perfil/ranking que o frontend utiliza.
+-- vw_perfis_publicos é SECURITY DEFINER para permitir consultar nomes de adversários
+-- sem abrir SELECT geral em usuarios; email e perfil administrativo ficam fora da projeção.
+alter view public.vw_perfis_publicos
+  set (security_invoker = false, security_barrier = true);
+create or replace view public.vw_perfis_publicos
+  with (security_invoker = false, security_barrier = true)
+as
+  select id, nome, nivel, pontos, vitorias, derrotas
+    from public.usuarios;
+
+revoke all on public.vw_perfis_publicos from public, anon, authenticated;
+grant select on public.vw_perfis_publicos to authenticated;
+
+-- O endpoint público de status consulta esta view, cuja projeção não contém dados privados.
+revoke all on public.vw_ranking_publico from public, anon, authenticated;
+grant select on public.vw_ranking_publico to anon, authenticated;
 
 -- A API altera somente usuarios.nome. Usuários autenticados não podem mudar
 -- perfil, pontos ou estatísticas diretamente; a resolução consulta perfil='admin'
