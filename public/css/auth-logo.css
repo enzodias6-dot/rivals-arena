@@ -1,0 +1,31 @@
+/* Ajustes exclusivos da tela de acesso: logo centralizada abaixo do título. */
+.auth-card h1 {
+  padding-bottom: 12px;
+}
+
+.auth-card .boot {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 190px;
+  margin: 0 auto 16px;
+}
+
+.auth-card .boot img {
+  display: block;
+  width: min(44vw, 184px);
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
+@media (max-width: 480px) {
+  .auth-card .boot {
+    min-height: 164px;
+  }
+
+  .auth-card .boot img {
+    width: min(48vw, 160px);
+  }
+}
