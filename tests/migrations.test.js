@@ -36,6 +36,11 @@ test('reinscrição mantém a UNIQUE global e reutiliza a mesma linha cancelada'
 
 test('resultado de partidas respeita VARCHAR e não exige nem cria fonte JSONB', () => {
   assert.match(partidas, /\('partidas',\s*'resultado',\s*'string'\)/i);
+  assert.match(partidas, /alter column resultado type text/i);
+  assert.match(partidas, /alter column status type text/i);
+  assert.match(partidas, /rename column data_agendada to agendada_para/i);
+  assert.match(partidas, /drop function if exists public\.confirmar_resultado_partida\(uuid, uuid, character varying\)/i);
+  assert.match(partidas, /status = 'finalizada'/i);
   assert.match(partidas, /resultado text not null check\s*\(\s*resultado ~ '\^\[0-9\]/i);
   assert.match(partidas, /p_resultado text/i);
   assert.match(partidas, /resultado = p_resultado/i);
