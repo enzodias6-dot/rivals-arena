@@ -1530,6 +1530,50 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
       cookie: jogador2.cookie
     })).json.partidas.length, 0);
     assert.equal(amb.supabase.tabelas.usuarios.find((item) => item.id === jogador1.id).vitorias, 0);
+
+    const decisaoSemAdmin = await amb.chamar('POST', `/api/partidas/${partidaId}/resultado/resolver`, {
+      cookie: jogador1.cookie,
+      corpo: {
+        vencedor_id: jogador2.id,
+        resultado: '1-2',
+        justificativa: 'Decisão de teste',
+        chave_idempotencia: UUID()
+      }
+    });
+    assert.equal(decisaoSemAdmin.status, 403);
+
+    amb.supabase.tabelas.usuarios.find((item) => item.id === organizador.id).perfil = 'admin';
+    const chaveAdmin = UUID();
+    const decisao = await amb.chamar('POST', `/api/partidas/${partidaId}/resultado/resolver`, {
+      cookie: organizador.cookie,
+      corpo: {
+        vencedor_id: jogador2.id,
+        resultado: '1-2',
+        justificativa: 'O relato do segundo participante foi confirmado pelas evidências.',
+        chave_idempotencia: chaveAdmin
+      }
+    });
+    assert.equal(decisao.status, 200);
+    assert.equal(decisao.json.resultado.status, 'confirmada');
+    assert.equal(decisao.json.resultado.vencedor_id, jogador2.id);
+    assert.equal(decisao.json.resultado.resolvido_por, organizador.id);
+    assert.match(decisao.json.resultado.justificativa, /evidências/);
+    assert.equal(amb.supabase.tabelas.partidas[0].status, 'concluida');
+    assert.equal(amb.supabase.tabelas.partidas[0].resultado, '1-2');
+    assert.equal(amb.supabase.tabelas.partida_resultados.length, 0);
+    assert.equal(amb.supabase.tabelas.usuarios.find((item) => item.id === jogador2.id).vitorias, 1);
+    assert.equal(amb.supabase.tabelas.usuarios.find((item) => item.id === jogador1.id).derrotas, 1);
+
+    const repetida = await amb.chamar('POST', `/api/partidas/${partidaId}/resultado/resolver`, {
+      cookie: organizador.cookie,
+      corpo: {
+        vencedor_id: jogador2.id,
+        resultado: '1-2',
+        justificativa: 'O relato do segundo participante foi confirmado pelas evidências.',
+        chave_idempotencia: chaveAdmin
+      }
+    });
+    assert.equal(repetida.status, 200);
   });
   const cadastro = await amb.chamar('POST', '/api/usuarios', {
     corpo: { nome: 'Teste Bloqueado', email: 'bloqueado@teste.com', senha: 'senha-forte-123' }
