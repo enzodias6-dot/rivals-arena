@@ -53,12 +53,18 @@ begin
   end loop;
 
   if not exists (
-    select 1 from pg_catalog.pg_constraint
-     where conrelid = 'public.inscricoes'::regclass
-       and conname = 'inscricoes_campeonato_id_jogador_id_key'
-       and contype = 'u'
+    select 1 from pg_catalog.pg_constraint as c
+     where c.conrelid = 'public.inscricoes'::regclass
+       and c.conname = 'inscricoes_campeonato_id_jogador_id_key'
+       and c.contype = 'u'
+       and c.conkey = array[
+         (select a.attnum::smallint from pg_catalog.pg_attribute as a
+           where a.attrelid = 'public.inscricoes'::regclass and a.attname = 'campeonato_id' and not a.attisdropped),
+         (select a.attnum::smallint from pg_catalog.pg_attribute as a
+           where a.attrelid = 'public.inscricoes'::regclass and a.attname = 'jogador_id' and not a.attisdropped)
+       ]::smallint[]
   ) then
-    raise exception 'A UNIQUE global campeonato_id/jogador_id deve permanecer presente para preservar uma única linha por jogador e campeonato.';
+    raise exception 'A UNIQUE global campeonato_id/jogador_id deve permanecer presente com exatamente essas duas colunas.';
   end if;
 
   if exists (
