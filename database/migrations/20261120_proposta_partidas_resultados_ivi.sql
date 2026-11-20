@@ -101,20 +101,13 @@ begin
     if v_tipo not in ('text', 'varchar') then
       raise exception 'public.partidas.status deve ser text/varchar para esta proposta.';
     end if;
-    if exists (
-      select 1 from pg_catalog.pg_constraint as c
-       where c.conrelid = 'public.partidas'::regclass
-         and c.contype = 'c'
-         and v_status_attnum = any(c.conkey)
-    ) then
-      raise exception 'Há CHECK existente sobre partidas.status; revise-o antes de propor novos estados.';
-    end if;
+    -- A restrição antiga será substituída nesta própria transação.
     execute $query$
       select exists (
         select 1 from public.partidas
          where status not in (
            'agendada', 'em_andamento', 'aguardando_confirmacao',
-           'disputada', 'concluida', 'cancelada'
+           'disputada', 'concluida', 'finalizada', 'cancelada'
          )
       )
     $query$ into v_status_invalido;
@@ -183,8 +176,12 @@ begin
          'submeter_resultado_partida', 'confirmar_resultado_partida',
          'contestar_resultado_partida', 'resolver_resultado_partida', 'agendar_partida'
        )
+       and not (
+         p.proname = 'confirmar_resultado_partida'
+         and pg_catalog.oidvectortypes(p.proargtypes) = 'uuid, uuid, character varying'
+       )
   ) then
-    raise exception 'Já existe uma RPC de partidas com nome proposto; compare as assinaturas antes de aplicar.';
+    raise exception 'Existe uma RPC de partidas com assinatura inesperada; compare-a antes de aplicar.';
   end if;
 
   if to_regclass('public.partidas_jogador_1_agendamento_idx') is not null
@@ -197,9 +194,60 @@ begin
 end
 $preflight$;
 
+-- Compatibiliza os nomes e tipos reais antes de criar as novas RPCs.
+do $compatibilidade_colunas$
+begin
+  if exists (
+    select 1 from pg_catalog.pg_attribute
+     where attrelid = 'public.partidas'::regclass
+       and attname = 'data_agendada' and not attisdropped
+  ) and not exists (
+    select 1 from pg_catalog.pg_attribute
+     where attrelid = 'public.partidas'::regclass
+       and attname = 'agendada_para' and not attisdropped
+  ) then
+    alter table public.partidas rename column data_agendada to agendada_para;
+  elsif exists (
+    select 1 from pg_catalog.pg_attribute
+     where attrelid = 'public.partidas'::regclass
+       and attname = 'data_agendada' and not attisdropped
+  ) and exists (
+    select 1 from pg_catalog.pg_attribute
+     where attrelid = 'public.partidas'::regclass
+       and attname = 'agendada_para' and not attisdropped
+  ) then
+    raise exception 'As colunas data_agendada e agendada_para coexistem; faça a conciliação manual antes da migração.';
+  else
+    alter table public.partidas add column if not exists agendada_para timestamptz;
+  end if;
+end
+$compatibilidade_colunas$;
+
+do $compatibilidade_status$
+declare
+  v_restricao record;
+begin
+  for v_restricao in
+    select c.conname
+      from pg_catalog.pg_constraint as c
+     where c.conrelid = 'public.partidas'::regclass
+       and c.contype = 'c'
+       and (select a.attnum from pg_catalog.pg_attribute as a
+             where a.attrelid = c.conrelid and a.attname = 'status'
+               and not a.attisdropped) = any(c.conkey)
+  loop
+    execute pg_catalog.format('alter table public.partidas drop constraint %I', v_restricao.conname);
+  end loop;
+end
+$compatibilidade_status$;
+
 alter table public.partidas
-  add column if not exists status text,
-  add column if not exists agendada_para timestamptz;
+  alter column status type text using status::text,
+  alter column resultado type text using resultado::text;
+
+-- A RPC antiga tinha a assinatura (uuid, uuid, varchar); o backend usa
+-- (uuid, uuid). Removemos somente essa assinatura conhecida, sem CASCADE.
+drop function if exists public.confirmar_resultado_partida(uuid, uuid, character varying);
 
 -- NULL em vencedor_id representa empate confirmado.
 alter table public.partidas alter column vencedor_id drop not null;
@@ -219,6 +267,10 @@ begin
   end if;
 end
 $validate_schedule_type$;
+
+update public.partidas
+   set status = 'concluida'
+ where status = 'finalizada';
 
 update public.partidas
    set status = case
