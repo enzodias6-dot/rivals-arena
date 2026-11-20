@@ -66,6 +66,16 @@ begin
     end if;
   end loop;
 
+  if exists (
+    select 1 from pg_catalog.pg_attribute as a
+     where a.attrelid = 'public.partidas'::regclass
+       and a.attname = 'vencedor_id'
+       and not a.attisdropped
+       and a.attnotnull
+  ) then
+    raise exception 'public.partidas.vencedor_id precisa aceitar NULL para representar empates.';
+  end if;
+
   select t.typname into v_tipo
     from pg_catalog.pg_attribute as a
     join pg_catalog.pg_type as t on t.oid = a.atttypid
