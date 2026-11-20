@@ -90,12 +90,37 @@ function criarRotasPartidas() {
 
   router.get('/partidas/agenda', async (req, res) => {
     const cliente = clienteDaRequisicao(req);
-    const { data: partidas } = await executar(cliente.from('partidas')
-      .select('id,campeonato_id,jogador_1_id,jogador_2_id,vencedor_id,fase,status,agendada_para,concluida_em,resultado')
+    const colunasPartida = 'id,campeonato_id,jogador_1_id,jogador_2_id,vencedor_id,fase,status,agendada_para,concluida_em,resultado';
+    const { data: partidasPessoais } = await executar(cliente.from('partidas')
+      .select(colunasPartida)
       .or(`jogador_1_id.eq.${req.usuario.id},jogador_2_id.eq.${req.usuario.id}`)
       .order('agendada_para', { ascending: true })
       .limit(50));
-    const idsPartidas = (partidas || []).map((partida) => partida.id);
+
+    let partidasAdministrativas = [];
+    try {
+      const { data: perfilAtual } = await executar(cliente.from('usuarios')
+        .select('perfil')
+        .eq('id', req.usuario.id)
+        .maybeSingle());
+      if (perfilAtual?.perfil === 'admin') {
+        const { data } = await executar(cliente.from('partidas')
+          .select(colunasPartida)
+          .eq('status', 'disputada')
+          .order('agendada_para', { ascending: true })
+          .limit(50));
+        partidasAdministrativas = data || [];
+      }
+    } catch (erro) {
+      const detalhe = erro?.code || erro?.status || erro?.name || 'erro desconhecido';
+      console.error(`Falha ao carregar fila administrativa de partidas: ${detalhe}`);
+    }
+
+    const partidas = [...new Map(
+      [...(partidasPessoais || []), ...partidasAdministrativas]
+        .map((partida) => [partida.id, partida])
+    ).values()];
+    const idsPartidas = partidas.map((partida) => partida.id);
     const idsJogadores = [...new Set((partidas || [])
       .flatMap((partida) => [partida.jogador_1_id, partida.jogador_2_id])
       .filter(Boolean))];
