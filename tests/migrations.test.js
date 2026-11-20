@@ -71,6 +71,11 @@ test('papel admin não pode ser alterado diretamente por usuários autenticados'
   assert.match(partidas, /grant update \(nome\) on public\.usuarios to authenticated/i);
   assert.match(partidas, /revoke update \(%I\) on public\.usuarios from public, anon, authenticated/i);
   assert.match(partidas, /create policy usuarios_update_nome_proprio/i);
+  assert.match(partidas, /security_barrier = true/i);
+  assert.match(partidas, /select id, nome, nivel, pontos, vitorias, derrotas/i);
+  assert.match(partidas, /revoke all on public\.vw_perfis_publicos from public, anon, authenticated/i);
+  assert.match(partidas, /grant select on public\.vw_ranking_publico to anon, authenticated/i);
+  assert.match(partidas, /c\.conname <> 'partidas_status_check'/i);
   assert.match(partidas, /create policy partida_resultados_select_admin/i);
   assert.match(partidas, /create policy partida_resultado_eventos_select_admin/i);
   assert.match(partidas, /select u\.perfil into v_perfil/i);
