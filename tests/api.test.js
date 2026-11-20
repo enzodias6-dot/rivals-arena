@@ -1482,6 +1482,7 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
     const admin = await amb.novoJogador('Admin da Arena');
     const jogador1 = await amb.novoJogador('Jogador da Partida Um');
     const jogador2 = await amb.novoJogador('Jogador da Partida Dois');
+    const visitante = await amb.novoJogador('Visitante sem vínculo');
     amb.supabase.tabelas.usuarios.find((item) => item.id === admin.id).perfil = 'admin';
     const campeonatoId = UUID();
     const partidaId = UUID();
@@ -1517,9 +1518,9 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
     assert.equal(agendaAdmin.json.partidas[0].id, partidaId);
     assert.equal(agendaAdmin.json.partidas[0].resultado.status, 'disputada');
 
-    const agendaJogador = await amb.chamar('GET', '/api/partidas/agenda', { cookie: admin.cookie });
-    assert.equal(agendaJogador.status, 200);
-    assert.equal(agendaJogador.json.partidas.length, 1);
+    const agendaVisitante = await amb.chamar('GET', '/api/partidas/agenda', { cookie: visitante.cookie });
+    assert.equal(agendaVisitante.status, 200);
+    assert.equal(agendaVisitante.json.partidas.length, 0);
   });
 
   test('empate só é confirmado após os dois jogadores relatarem o mesmo placar', async (t) => {
