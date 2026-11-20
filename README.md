@@ -39,6 +39,16 @@ O objetivo do Rivals Arena é oferecer um ambiente digital para organizar e acom
 - **Site publicado:** https://rivals-arena-ten.vercel.app
 - **Repositório GitHub:** https://github.com/enzodias6-dot/rivals-arena
 
+## Documentação para consulta e entrega
+
+Para encontrar os materiais sem precisar procurar em várias pastas, reunimos os documentos de apoio em `docs/`:
+
+- **Modelagem do banco de dados:** [abrir o pacote de modelagem](./docs/modelagem-banco.zip). O ZIP reúne a modelagem conceitual, a modelagem lógica e o Diagrama Entidade-Relacionamento (DER), além dos diagramas em formatos de imagem e texto.
+- **Instalação e utilização:** [ler o guia passo a passo](./docs/arquivos-adicionais/INSTALACAO_E_USO.md).
+- **Arquivos adicionais:** [abrir a pasta de documentação](./docs/arquivos-adicionais/), com o índice e os scripts SQL de referência.
+
+> **Nota sobre o banco:** os scripts SQL disponibilizados no projeto são do modelo legado em MySQL. A aplicação atual utiliza Supabase com PostgreSQL. Eles estão identificados dessa forma na documentação para evitar que sejam executados no banco errado. O repositório ainda não apresenta um script único, completo e homologado para recriar do zero toda a estrutura atual do Supabase.
+
 ## Requisitos
 
 - Node.js 20 ou superior.
@@ -101,7 +111,7 @@ O cálculo Elo proposto é isolado e testado em `src/domain/ivi.js`, com rating 
 
 O inventário informa RLS habilitada nas sete tabelas existentes, mas não inclui as policies nem os grants completos. `vw_ranking_publico` usa `security_invoker=false` e requer revisão da definição, owner, colunas e grants; `vw_perfis_publicos` usa `security_invoker=true`. O trigger de criação de perfil foi informado como habilitado, mas o corpo da função não está versionado neste repositório. Nenhum SQL foi executado e nenhuma policy remota foi alterada. As operações autenticadas usam o token do próprio usuário; um bloqueio RLS não é contornado.
 
-As decisões, pressupostos, riscos, requisitos de RLS/grants e limitações das funcionalidades estão em [docs/PLANO_FUNCIONALIDADES_PENDENTES.md](./docs/PLANO_FUNCIONALIDADES_PENDENTES.md).
+As decisões, pressupostos, riscos e limitações técnicas também são explicados ao longo deste README e no [guia de instalação e utilização](./docs/arquivos-adicionais/INSTALACAO_E_USO.md).
 
 A constraint informada `inscricoes_campeonato_id_jogador_id_key` impede nova linha para o mesmo jogador/campeonato mesmo após cancelamento. A rota verifica vagas antes do insert, mas isso não é atômico. A migração [20261120_proposta_inscricao_atomica_reinscricao.sql](./database/migrations/20261120_proposta_inscricao_atomica_reinscricao.sql) identifica somente essa constraint exata, bloqueia constraints/índices equivalentes adicionais e dependências FK, e a substitui por unicidade parcial de inscrições ativas. Não foi executada; colunas, estados, RLS/grants e dependências ainda precisam de homologação. A aplicação não chama a RPC antiga em [database/migrations/20261119_inscricao_atomica.sql](./database/migrations/20261119_inscricao_atomica.sql), que também não resolve a constraint global atual.
 
