@@ -93,7 +93,7 @@ Os rótulos abaixo medem compatibilidade com as evidências disponíveis; **“C
 - Obter definição/owner/grants das três views, funções existentes, políticas RLS por operação e ACLs diretas e herdadas para `anon`, `authenticated` e `PUBLIC`.
 - Obter definição e privilégios da função associada ao trigger de cadastro.
 - Definir o processo de publicação do Arsenal e quem poderá publicar; não conceder escrita ao cliente sem decisão.
-- A regra funcional de empates e resolução administrativa foi aprovada e está refletida na proposta. Permanecem pendentes a homologação do limite/formato do placar, estados de partidas, políticas/grants reais e qualquer regra de pontos para empate. IVI continua sem ativação até aprovação de fórmula.
+- A regra funcional de empates e resolução administrativa foi aprovada e está refletida na proposta: empate requer confirmação dos dois jogadores; a confirmação registra um empate para cada jogador; contestação pode ser resolvida pelo administrador escolhendo um relato ou definindo terceiro resultado, com justificativa e auditoria obrigatórias. Permanecem pendentes homologação do limite/formato do placar, estados de partidas, políticas/grants reais e definição de pontuação para empate. IVI continua sem ativação até aprovação de fórmula.
 
 ## 5. Riscos
 
@@ -145,7 +145,8 @@ Os rótulos abaixo medem compatibilidade com as evidências disponíveis; **“C
 
 ## 9. Decisões pendentes da equipe
 
-- Quais status e limites de placar são oficiais; se empate é permitido; quem resolve divergências.
+- Status oficiais, limites numéricos e formato máximo de placar aceitos pelo schema real.
+- Pontuação concedida por empate; a regra de confirmação e o registro de um empate por jogador já foram aprovados.
 - Regras de times: capacidade, um ou múltiplos times por jogador, saída/liderança e regras de visibilidade.
 - Processo/role responsável por cadastrar e publicar Arsenal.
 - Fórmula IVI, parâmetros, partidas elegíveis, arredondamento e momento de ativação.
@@ -157,7 +158,7 @@ Os rótulos abaixo medem compatibilidade com as evidências disponíveis; **“C
 
 **O projeto ainda não está pronto para aplicação das migrações em produção nem para declarar integração real.** O inventário confirmou correções importantes — especialmente o `VARCHAR` de resultado, a constraint de inscrição e as tabelas de Times existentes — mas não trouxe o schema detalhado, policies, ACLs, owners, views ou corpo da função de cadastro.
 
-**Validação desta revisão:** pendente de nova execução após as alterações desta branch. A validação anterior registrada no histórico (55/55 testes, `npm run check` e `git diff --check HEAD`) não comprova os commits atuais. Executar `npm test`, `npm run check` e `git diff --check` no Codespace antes de aprovar o PR. Os testes de API usam Supabase simulado e os testes de migração inspecionam SQL estaticamente; nenhum deles executa ou comprova o banco real.
+**Validação desta revisão documental:** não foram executados testes nesta atualização remota. Na execução mais recente registrada pela equipe no Codespace, `npm ci` concluiu sem vulnerabilidades reportadas e `npm test` passou com 59/59 testes; `npm run check` verificou sintaxe em 39/39 arquivos JavaScript e 8 páginas HTML. Essa execução antecede as alterações documentais desta revisão. Executar novamente `npm test` e `git diff --check` no Codespace antes de aprovar o PR. Os testes de API usam Supabase simulado e os testes de migração inspecionam SQL estaticamente; nenhum deles executa ou comprova o banco real.
 
 | Migração | Classificação | Motivo principal |
 |---|---|---|
