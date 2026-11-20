@@ -48,6 +48,7 @@ test('relatos confirmados são removidos do staging e o histórico IVI referenci
 test('empates exigem confirmação dos dois jogadores e não inventam pontuação', () => {
   assert.match(partidas, /v_pontos_jogador_1 = v_pontos_jogador_2 and p_vencedor_id is not null/i);
   assert.match(partidas, /insert into public\.partida_empates/i);
+  assert.match(partidas, /vencedor_id precisa aceitar NULL para representar empates/i);
   assert.match(partidas, /v_resultado\.vencedor_id is null/i);
   assert.match(partidas, /v_resultado\.vencedor_id is not distinct from p_vencedor_id/i);
   assert.doesNotMatch(partidas, /draw_not_supported/i);
