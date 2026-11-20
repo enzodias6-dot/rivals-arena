@@ -137,8 +137,19 @@ begin
   ) then
     raise exception 'RLS precisa estar habilitada em public.partidas antes de liberar a fila administrativa.';
   end if;
+  if not exists (
+    select 1 from pg_catalog.pg_class
+     where oid = 'public.usuarios'::regclass and relrowsecurity
+  ) then
+    raise exception 'RLS precisa estar habilitada em public.usuarios para proteger o perfil e o papel administrativo.';
+  end if;
 
   if exists (
+    select 1 from pg_catalog.pg_policies
+     where schemaname = 'public'
+       and tablename = 'usuarios'
+       and policyname = 'usuarios_update_nome_proprio'
+  ) or exists (
     select 1 from pg_catalog.pg_policies
      where schemaname = 'public'
        and tablename = 'partidas'
@@ -936,6 +947,12 @@ begin
 end
 $revoke_column_updates$;
 grant update (nome) on public.usuarios to authenticated;
+
+create policy usuarios_update_nome_proprio on public.usuarios
+  for update to authenticated
+  using (id = (select auth.uid()))
+  with check (id = (select auth.uid()));
+
 grant select on public.partidas to authenticated;
 
 create policy partidas_select_admin_disputadas on public.partidas
