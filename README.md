@@ -2,6 +2,43 @@
 
 Plataforma web acadêmica de torneios 1V1, ranking e perfil de combatentes. O projeto preserva o frontend em HTML, CSS e JavaScript puro e usa Node.js + Express 5 no backend. A persistência atual da aplicação foi migrada para Supabase (Auth e PostgreSQL).
 
+## Objetivo do sistema
+
+O objetivo do Rivals Arena é oferecer um ambiente digital para organizar e acompanhar competições de jogos eletrônicos, centralizando informações de jogadores, campeonatos, inscrições, partidas, desafios, equipes e classificações. A plataforma busca tornar a experiência dos participantes mais organizada e facilitar o acesso às informações competitivas.
+
+## Funcionalidades
+
+- **Cadastro e autenticação:** criação de conta e login com Supabase Auth.
+- **Central do jogador:** página inicial com acesso aos módulos da plataforma.
+- **Campeonatos:** consulta e gerenciamento de competições e inscrições.
+- **Inscrições:** registro e consulta do estado das inscrições dos participantes.
+- **Partidas e histórico:** consulta de partidas e resultados já registrados; fluxos avançados de agenda, confirmação e contestação dependem de homologação da migração correspondente.
+- **Desafios:** recursos para organizar desafios entre jogadores.
+- **Ranking:** consulta da classificação com base nos pontos, vitórias e derrotas registrados.
+- **Perfil:** visualização de informações do jogador.
+- **Times:** interface e rotas para equipes e integrantes; a integração completa depende da confirmação do schema e das permissões reais do banco.
+
+> **Estado de integração:** algumas funcionalidades avançadas ainda dependem de revisão e homologação de schema, triggers, policies RLS, grants e migrações no Supabase. Os testes automatizados utilizam simulações e não substituem testes de integração no banco real.
+
+## Tecnologias utilizadas
+
+| Tecnologia | Utilização |
+|---|---|
+| HTML5 | Estrutura das páginas |
+| CSS3 | Estilização e identidade visual |
+| JavaScript | Interatividade do frontend |
+| Node.js | Ambiente de execução do backend |
+| Express 5 | Servidor HTTP e API |
+| Supabase Auth | Autenticação e gerenciamento de sessão |
+| PostgreSQL (Supabase) | Persistência dos dados |
+| Vercel | Hospedagem e publicação |
+| Git e GitHub | Versionamento e colaboração |
+
+## Acessos do projeto
+
+- **Site publicado:** https://rivals-arena-ten.vercel.app
+- **Repositório GitHub:** https://github.com/enzodias6-dot/rivals-arena
+
 ## Requisitos
 
 - Node.js 20 ou superior.
