@@ -1,8 +1,7 @@
 -- PROPOSTA NÃO EXECUTADA.
--- Serializa entradas e reinscrições no PostgreSQL; a proteção também vale para inserts
--- que não usem a RPC antiga. Preserva linhas canceladas e substitui somente a constraint
--- conhecida inscricoes_campeonato_id_jogador_id_key, após confirmar seu tipo e colunas.
--- Índices standalone equivalentes bloqueiam a migração; nenhum índice é removido.
+-- Serializa entradas e reinscrições no PostgreSQL. Mantém a UNIQUE global conhecida
+-- inscricoes_campeonato_id_jogador_id_key: reinscrever é atualizar a mesma linha cancelada,
+-- preservando seu id e inscrito_em. Nenhum índice ou constraint UNIQUE é removido.
 -- Não substitui nem remove policies RLS; revise as policies atuais antes da aplicação.
 
 begin;
@@ -50,6 +49,15 @@ begin
       raise exception 'Tipo incompatível em public.%.%; interrompendo antes de alterar constraints.', v_coluna.tabela, v_coluna.coluna;
     end if;
   end loop;
+
+  if not exists (
+    select 1 from pg_catalog.pg_constraint
+     where conrelid = 'public.inscricoes'::regclass
+       and conname = 'inscricoes_campeonato_id_jogador_id_key'
+       and contype = 'u'
+  ) then
+    raise exception 'A UNIQUE global campeonato_id/jogador_id deve permanecer presente para preservar uma única linha por jogador e campeonato.';
+  end if;
 
   if exists (
     select 1 from public.inscricoes
@@ -117,7 +125,9 @@ begin
     if old.status = 'cancelada' and new.status not in ('cancelada', 'pendente') then
       raise exception using errcode = '42501', message = 'registration_status_transition_forbidden';
     end if;
-    if auth.uid() is not null and new.status not in (old.status, 'cancelada', 'pendente') then
+    if auth.uid() is not null
+       and new.status not in (old.status, 'cancelada')
+       and not (old.status = 'cancelada' and new.status = 'pendente') then
       raise exception using errcode = '42501', message = 'registration_status_transition_forbidden';
     end if;
   end if;
