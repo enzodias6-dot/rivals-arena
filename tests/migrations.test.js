@@ -42,6 +42,22 @@ test('relatos confirmados são removidos do staging e o histórico IVI referenci
   assert.match(partidas, /returns jsonb/i);
 });
 
+test('empates exigem confirmação dos dois jogadores e não inventam pontuação', () => {
+  assert.match(partidas, /v_pontos_jogador_1 = v_pontos_jogador_2 and p_vencedor_id is not null/i);
+  assert.match(partidas, /insert into public\.partida_empates/i);
+  assert.match(partidas, /v_resultado\.vencedor_id is null/i);
+  assert.match(partidas, /v_resultado\.vencedor_id is not distinct from p_vencedor_id/i);
+  assert.doesNotMatch(partidas, /draw_not_supported/i);
+  assert.doesNotMatch(partidas, /set pontos\s*=\s*coalesce\(pontos/i);
+});
+
+test('papel admin não pode ser alterado diretamente por usuários autenticados', () => {
+  assert.match(partidas, /revoke update on public\.usuarios from public, anon, authenticated/i);
+  assert.match(partidas, /grant update \(nome\) on public\.usuarios to authenticated/i);
+  assert.match(partidas, /select u\.perfil into v_perfil/i);
+  assert.match(partidas, /v_perfil is distinct from 'admin'/i);
+});
+
 test('funções de resultados são SECURITY DEFINER com search_path vazio e EXECUTE restrito', () => {
   const funcoes = partidas.split(/create function public\./i).slice(1);
   const funcoesResultado = funcoes.filter((trecho) =>
