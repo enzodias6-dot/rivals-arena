@@ -553,6 +553,75 @@ function criarSupabaseFake({
         });
         return Promise.resolve({ data: resultadoAtual(partidaId), error: null });
       }
+      case 'resolver_resultado_partida': {
+        const partidaId = parametros.p_partida_id;
+        const chave = parametros.p_chave_idempotencia;
+        const admin = tabelas.usuarios.find((item) => item.id === usuarioId);
+        if (admin?.perfil !== 'admin') {
+          return Promise.resolve(falha('42501', 'administrator_required', 403));
+        }
+        const dados = {
+          operacao: 'resolver_admin',
+          vencedor_id: parametros.p_vencedor_id,
+          resultado: parametros.p_resultado,
+          justificativa: parametros.p_justificativa
+        };
+        const eventoExistente = eventosResultado.get(chave);
+        if (eventoExistente) {
+          if (eventoExistente.atorId !== usuarioId ||
+              eventoExistente.partidaId !== partidaId ||
+              eventoExistente.acao !== 'resolvido_admin' ||
+              !isDeepStrictEqual(eventoExistente.dados, dados)) {
+            return Promise.resolve(falha('23505', 'idempotency_key_reused', 409));
+          }
+          return Promise.resolve({ data: resultadoAtual(partidaId), error: null });
+        }
+        const partida = tabelas.partidas.find((item) => item.id === partidaId);
+        const resultado = tabelas.partida_resultados.find((item) => item.partida_id === partidaId);
+        if (!partida || !resultado) {
+          return Promise.resolve(falha('P0002', 'match_not_found', 404));
+        }
+        if (partida.status !== 'disputada' || resultado.status !== 'disputada') {
+          return Promise.resolve(falha('P0001', 'result_not_disputed', 409));
+        }
+        if (!parametros.p_justificativa?.trim() || parametros.p_justificativa.trim().length > 1000) {
+          return Promise.resolve(falha('22023', 'invalid_admin_resolution_payload'));
+        }
+        if (![partida.jogador_1_id, partida.jogador_2_id].includes(parametros.p_vencedor_id)) {
+          return Promise.resolve(falha('22023', 'winner_must_be_participant'));
+        }
+        const [p1, p2] = parametros.p_resultado.split('-').map(Number);
+        const vencedorPlacar = p1 > p2 ? partida.jogador_1_id : partida.jogador_2_id;
+        if (p1 === p2 || vencedorPlacar !== parametros.p_vencedor_id) {
+          return Promise.resolve(falha('22023', 'score_winner_mismatch'));
+        }
+        partida.status = 'concluida';
+        partida.vencedor_id = parametros.p_vencedor_id;
+        partida.resultado = parametros.p_resultado;
+        partida.concluida_em = new Date().toISOString();
+        const perdedorId = partida.jogador_1_id === parametros.p_vencedor_id
+          ? partida.jogador_2_id : partida.jogador_1_id;
+        const vencedor = tabelas.usuarios.find((item) => item.id === parametros.p_vencedor_id);
+        const perdedor = tabelas.usuarios.find((item) => item.id === perdedorId);
+        if (vencedor) vencedor.vitorias += 1;
+        if (perdedor) perdedor.derrotas += 1;
+        tabelas.partida_resultados.splice(tabelas.partida_resultados.indexOf(resultado), 1);
+        eventosResultado.set(chave, {
+          atorId: usuarioId,
+          partidaId,
+          acao: 'resolvido_admin',
+          dados
+        });
+        const resposta = resultadoAtual(partidaId);
+        return Promise.resolve({
+          data: {
+            ...resposta,
+            resolvido_por: usuarioId,
+            justificativa: parametros.p_justificativa.trim()
+          },
+          error: null
+        });
+      }
       case 'agendar_partida': {
         const partida = tabelas.partidas.find((item) => item.id === parametros.p_partida_id);
         const campeonato = partida && tabelas.campeonatos.find((item) => item.id === partida.campeonato_id);
