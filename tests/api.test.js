@@ -1326,7 +1326,7 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
     })).status, 404);
   });
 
-  test('inscrição pode ser refeita após cancelamento e preserva as duas entradas no histórico', async (t) => {
+  test('reinscrição reutiliza a mesma linha e preserva ID e data original', async (t) => {
     const amb = await criarAmbiente();
     t.after(amb.encerrar);
     const jogador = await amb.novoJogador('Reinscrição');
@@ -1341,16 +1341,18 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
     assert.equal((await amb.chamar('POST', `/api/torneios/${campeonatoId}/inscricao`, {
       cookie: jogador.cookie, corpo: {}
     })).status, 201);
+    const original = { ...amb.supabase.tabelas.inscricoes[0] };
     assert.equal((await amb.chamar('DELETE', `/api/torneios/${campeonatoId}/inscricao`, {
       cookie: jogador.cookie
     })).status, 200);
-    assert.equal((await amb.chamar('POST', `/api/torneios/${campeonatoId}/inscricao`, {
+    const reinscricao = await amb.chamar('POST', `/api/torneios/${campeonatoId}/inscricao`, {
       cookie: jogador.cookie, corpo: {}
-    })).status, 201);
-    assert.deepEqual(
-      amb.supabase.tabelas.inscricoes.map((item) => item.status),
-      ['cancelada', 'pendente']
-    );
+    });
+    assert.equal(reinscricao.status, 201);
+    assert.equal(amb.supabase.tabelas.inscricoes.length, 1);
+    assert.equal(amb.supabase.tabelas.inscricoes[0].id, original.id);
+    assert.equal(amb.supabase.tabelas.inscricoes[0].inscrito_em, original.inscrito_em);
+    assert.equal(amb.supabase.tabelas.inscricoes[0].status, 'pendente');
   });
 
   test('inscrição atômica no banco deve proteger a última vaga contra requisições concorrentes', async (t) => {
