@@ -319,8 +319,7 @@ function criarSupabaseFake({
         ...(this.tabela === 'desafios' ? { data_criacao: new Date().toISOString(), status: 'pendente' } : {})
       }));
       if (this.tabela === 'inscricoes' && rows.some((nova) => tabelas.inscricoes.some((atual) =>
-        atual.campeonato_id === nova.campeonato_id && atual.jogador_id === nova.jogador_id &&
-        ['pendente', 'aprovada'].includes(atual.status)
+        atual.campeonato_id === nova.campeonato_id && atual.jogador_id === nova.jogador_id
       ))) {
         return { data: null, error: respostaErro('23505', 'duplicate key value violates unique constraint', 409) };
       }
@@ -365,9 +364,10 @@ function criarSupabaseFake({
     atualizar(rows) {
       const alteradas = rows.filter((linha) => {
         if (this.tabela === 'inscricoes') {
-          return linha.jogador_id === this.usuarioId &&
-            ['pendente', 'aprovada'].includes(linha.status) &&
-            this.payload.status === 'cancelada';
+          return linha.jogador_id === this.usuarioId && (
+            (['pendente', 'aprovada'].includes(linha.status) && this.payload.status === 'cancelada') ||
+            (linha.status === 'cancelada' && this.payload.status === 'pendente')
+          );
         }
         return this.tabela !== 'desafios' || linha.desafiado_id === this.usuarioId;
       });
