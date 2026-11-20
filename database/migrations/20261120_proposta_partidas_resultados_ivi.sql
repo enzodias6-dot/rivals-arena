@@ -987,7 +987,7 @@ alter view public.vw_perfis_publicos
 create or replace view public.vw_perfis_publicos
   with (security_invoker = false, security_barrier = true)
 as
-  select id, nome, perfil, nivel, pontos, vitorias, derrotas
+  select id, nome, nivel, pontos, vitorias, derrotas
     from public.usuarios;
 
 revoke all on public.vw_perfis_publicos from public, anon, authenticated;
