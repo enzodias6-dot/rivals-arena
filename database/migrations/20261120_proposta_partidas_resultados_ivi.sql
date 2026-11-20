@@ -821,6 +821,10 @@ begin
   if v_partida.status <> 'disputada' or v_partida.concluida_em is not null then
     raise exception using errcode = 'P0001', message = 'result_not_disputed';
   end if;
+  if v_partida.jogador_1_id is null or v_partida.jogador_2_id is null
+     or v_partida.jogador_1_id = v_partida.jogador_2_id then
+    raise exception using errcode = '22023', message = 'match_participants_invalid';
+  end if;
   if p_vencedor_id is not null
      and p_vencedor_id not in (v_partida.jogador_1_id, v_partida.jogador_2_id) then
     raise exception using errcode = '22023', message = 'winner_must_be_participant';
@@ -913,7 +917,24 @@ $function$;
 revoke insert, update, delete, truncate, references, trigger
   on public.partidas, public.usuarios from anon;
 revoke update on public.usuarios from public, anon, authenticated;
-revoke update (perfil) on public.usuarios from public, anon, authenticated;
+do $revoke_column_updates$
+declare
+  v_coluna record;
+begin
+  for v_coluna in
+    select a.attname
+      from pg_catalog.pg_attribute as a
+     where a.attrelid = 'public.usuarios'::regclass
+       and a.attnum > 0
+       and not a.attisdropped
+  loop
+    execute pg_catalog.format(
+      'revoke update (%I) on public.usuarios from public, anon, authenticated',
+      v_coluna.attname
+    );
+  end loop;
+end
+$revoke_column_updates$;
 grant update (nome) on public.usuarios to authenticated;
 grant select on public.partidas to authenticated;
 
