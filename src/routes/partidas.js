@@ -7,9 +7,9 @@ const { lerUuid, validarTimestampCampeonato } = require('../utils/validacao');
 
 function validarCorpoResultado(corpo) {
   const dados = corpo && typeof corpo === 'object' && !Array.isArray(corpo) ? corpo : {};
-  const vencedorId = lerUuid(dados.vencedor_id);
+  const vencedorId = dados.vencedor_id === null ? null : lerUuid(dados.vencedor_id);
   const chaveIdempotencia = lerUuid(dados.chave_idempotencia);
-  if (!vencedorId) return { erro: 'Informe um vencedor válido.' };
+  if (dados.vencedor_id !== null && !vencedorId) return { erro: 'Informe um vencedor válido ou null em caso de empate.' };
   if (!chaveIdempotencia) return { erro: 'Informe uma chave de idempotência UUID para a operação.' };
   const resultado = typeof dados.resultado === 'string'
     ? dados.resultado
@@ -21,8 +21,8 @@ function validarCorpoResultado(corpo) {
     return { erro: 'Informe o placar no formato numérico exigido, por exemplo 2-1.' };
   }
   const [pontosJogador1, pontosJogador2] = resultado.split('-').map(BigInt);
-  if (pontosJogador1 === pontosJogador2) {
-    return { erro: 'O placar deve identificar um vencedor.' };
+  if ((pontosJogador1 === pontosJogador2) !== (vencedorId === null)) {
+    return { erro: 'Informe vencedor_id como null somente quando o placar indicar empate.' };
   }
   return { vencedorId, resultado, chaveIdempotencia };
 }
@@ -40,7 +40,10 @@ function resultadoConfirmado(partida) {
 
 function responderErroPartida(res, error) {
   if (error.code === '42501' || error.status === 403) {
-    return res.status(403).json({ mensagem: 'Você não tem permissão para alterar esta partida.' });
+    const mensagem = error.message === 'administrator_required'
+      ? 'Somente um administrador pode resolver resultados contestados.'
+      : 'Você não tem permissão para alterar esta partida.';
+    return res.status(403).json({ mensagem });
   }
   if (error.code === 'P0002') return res.status(404).json({ mensagem: 'Partida ou resultado não encontrado.' });
   if (['P0001', '23505'].includes(error.code)) {
@@ -198,9 +201,15 @@ function criarRotasPartidas() {
       : '';
     const chaveIdempotencia = lerUuid(corpo.chave_idempotencia);
 
-    if (!vencedorId) return res.status(400).json({ mensagem: 'Informe um vencedor válido para a decisão administrativa.' });
+    if (corpo.vencedor_id !== null && !vencedorId) {
+      return res.status(400).json({ mensagem: 'Informe um vencedor válido ou null em caso de empate.' });
+    }
     if (!/^\d{1,31}-\d{1,31}$/.test(resultado) || resultado.length > 63) {
       return res.status(400).json({ mensagem: 'Informe o placar no formato 2-1.' });
+    }
+    const [pontos1, pontos2] = resultado.split('-').map(BigInt);
+    if ((pontos1 === pontos2) !== (vencedorId === null)) {
+      return res.status(400).json({ mensagem: 'O vencedor deve corresponder ao placar; em empate, envie vencedor_id como null.' });
     }
     if (!justificativa || justificativa.length > 1000) {
       return res.status(400).json({ mensagem: 'A justificativa é obrigatória e deve ter até 1000 caracteres.' });
