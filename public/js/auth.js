@@ -90,22 +90,4 @@
       irParaCentral();
     });
   });
-
-  // Efeito visual decorativo da tela de acesso.
-  const terminal = $('#boot');
-  if (terminal) {
-    const linhas = [
-      'Inicializando conexão com a arena...',
-      'Verificando credenciais de acesso...',
-      'Preparando combatente...'
-    ];
-
-    linhas.forEach((linha, indice) => {
-      window.setTimeout(() => {
-        const item = document.createElement('div');
-        item.textContent = linha;
-        terminal.append(item);
-      }, indice * 600);
-    });
-  }
 })();
