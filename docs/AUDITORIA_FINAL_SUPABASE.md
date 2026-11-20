@@ -157,7 +157,7 @@ Os rótulos abaixo medem compatibilidade com as evidências disponíveis; **“C
 
 **O projeto ainda não está pronto para aplicação das migrações em produção nem para declarar integração real.** O inventário confirmou correções importantes — especialmente o `VARCHAR` de resultado, a constraint de inscrição e as tabelas de Times existentes — mas não trouxe o schema detalhado, policies, ACLs, owners, views ou corpo da função de cadastro.
 
-**Validação local desta revisão:** `npm test` passou com 55/55 testes; `npm run check` confirmou sintaxe em 39/39 arquivos JavaScript e integridade de links/arquivos/IDs em 8 páginas HTML; `git diff --check HEAD` passou. Os testes de API usam Supabase simulado e os testes de migração inspecionam SQL estaticamente; nenhum deles executa ou comprova o banco real.
+**Validação desta revisão:** pendente de nova execução após as alterações desta branch. A validação anterior registrada no histórico (55/55 testes, `npm run check` e `git diff --check HEAD`) não comprova os commits atuais. Executar `npm test`, `npm run check` e `git diff --check` no Codespace antes de aprovar o PR. Os testes de API usam Supabase simulado e os testes de migração inspecionam SQL estaticamente; nenhum deles executa ou comprova o banco real.
 
 | Migração | Classificação | Motivo principal |
 |---|---|---|
