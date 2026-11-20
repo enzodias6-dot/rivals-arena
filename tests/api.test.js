@@ -1476,6 +1476,52 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
     })).status, 409);
   });
 
+  test('agenda mostra partidas contestadas a administradores que não são participantes', async (t) => {
+    const amb = await criarAmbiente();
+    t.after(amb.encerrar);
+    const admin = await amb.novoJogador('Admin da Arena');
+    const jogador1 = await amb.novoJogador('Jogador da Partida Um');
+    const jogador2 = await amb.novoJogador('Jogador da Partida Dois');
+    amb.supabase.tabelas.usuarios.find((item) => item.id === admin.id).perfil = 'admin';
+    const campeonatoId = UUID();
+    const partidaId = UUID();
+    amb.supabase.seed('campeonatos', {
+      id: campeonatoId,
+      nome: 'Campeonato em disputa',
+      criador_id: jogador1.id
+    });
+    amb.supabase.seed('partidas', {
+      id: partidaId,
+      campeonato_id: campeonatoId,
+      jogador_1_id: jogador1.id,
+      jogador_2_id: jogador2.id,
+      status: 'disputada',
+      resultado: null,
+      agendada_para: null,
+      concluida_em: null
+    });
+    amb.supabase.seed('partida_resultados', {
+      partida_id: partidaId,
+      reportado_por: jogador1.id,
+      vencedor_id: jogador1.id,
+      resultado: '2-1',
+      status: 'disputada',
+      contestado_por: jogador2.id,
+      vencedor_contestado_id: jogador2.id,
+      resultado_contestado: '1-2'
+    });
+
+    const agendaAdmin = await amb.chamar('GET', '/api/partidas/agenda', { cookie: admin.cookie });
+    assert.equal(agendaAdmin.status, 200);
+    assert.equal(agendaAdmin.json.partidas.length, 1);
+    assert.equal(agendaAdmin.json.partidas[0].id, partidaId);
+    assert.equal(agendaAdmin.json.partidas[0].resultado.status, 'disputada');
+
+    const agendaJogador = await amb.chamar('GET', '/api/partidas/agenda', { cookie: admin.cookie });
+    assert.equal(agendaJogador.status, 200);
+    assert.equal(agendaJogador.json.partidas.length, 1);
+  });
+
   test('empate só é confirmado após os dois jogadores relatarem o mesmo placar', async (t) => {
     const amb = await criarAmbiente();
     t.after(amb.encerrar);
