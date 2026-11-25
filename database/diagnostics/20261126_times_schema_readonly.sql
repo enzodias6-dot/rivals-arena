@@ -90,6 +90,7 @@ select
 from pg_proc pr
 join pg_namespace ns on ns.oid = pr.pronamespace
 where ns.nspname = 'public'
+  and pr.prokind = 'f'
   and (
     pr.proname ilike '%time%'
     or pg_get_functiondef(pr.oid) ilike '%membros_time%'
