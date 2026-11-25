@@ -1,0 +1,162 @@
+.team-status {
+  min-height: 1.5em;
+  margin: 10px 0 18px;
+}
+#team-create-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  max-width: 760px;
+}
+#team-create-form input,
+#team-create-form textarea,
+#team-create-form select,
+.team-list-actions input,
+.team-edit-form input,
+.team-edit-form textarea,
+.team-edit-form select,
+.team-transfer select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0c1018;
+  color: var(--text);
+}
+#team-create-form textarea,
+.team-edit-form textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+#team-create-form label,
+.team-edit-form label {
+  margin-top: 6px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+#team-create-form button {
+  justify-self: start;
+  margin-top: 8px;
+}
+.team-list-section {
+  margin-top: 34px;
+}
+.team-list-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.team-list-heading h2 {
+  margin-bottom: 4px;
+}
+.team-list-heading .meta {
+  margin-top: 0;
+}
+.team-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: min(100%, 360px);
+}
+.team-list-actions input {
+  min-width: 0;
+}
+.team-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.team-card h3,
+.team-card p {
+  margin: 0;
+}
+.team-card h3 {
+  overflow-wrap: anywhere;
+}
+.team-card .meta {
+  font-size: 12px;
+}
+.team-role {
+  color: var(--muted);
+  font-size: 13px;
+}
+.team-pending {
+  color: var(--red-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+.team-card button {
+  margin-top: auto;
+}
+#team-detail {
+  margin-top: 24px;
+  padding: 24px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+#team-detail h2,
+#team-detail h3 {
+  margin-top: 0;
+}
+#team-detail ul {
+  padding-left: 20px;
+}
+#team-detail li {
+  margin: 8px 0;
+}
+.team-edit-form {
+  display: grid;
+  gap: 10px;
+  max-width: 700px;
+}
+.team-transfer {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+.team-transfer label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 760px) {
+  .team-list-actions {
+    width: 100%;
+    min-width: 0;
+  }
+  .team-list-actions input {
+    flex: 1;
+  }
+}
+@media (max-width: 520px) {
+  .team-list-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .team-list-actions button {
+    width: 100%;
+  }
+  #team-detail {
+    padding: 18px;
+  }
+}
