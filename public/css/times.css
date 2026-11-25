@@ -238,3 +238,206 @@ body[data-page="times"] #team-detail {
     margin-top: 32px;
   }
 }
+
+
+/* ---------- Refinos de interação e apresentação da aba Times ---------- */
+body[data-page="times"] .team-results-count {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+body[data-page="times"] .team-list-actions {
+  flex: 0 1 420px;
+}
+
+body[data-page="times"] .team-list-actions button {
+  min-height: 44px;
+}
+
+body[data-page="times"] #team-list {
+  align-items: stretch;
+  gap: 20px;
+}
+
+body[data-page="times"] .team-card {
+  min-height: 250px;
+  gap: 12px;
+  padding: 24px;
+}
+
+body[data-page="times"] .team-card-tag,
+body[data-page="times"] .team-detail-kicker {
+  color: var(--red-soft);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+
+body[data-page="times"] .team-card h3 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+body[data-page="times"] .team-card-description {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+body[data-page="times"] .team-card-members {
+  margin-top: auto;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+body[data-page="times"] .team-role {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  margin: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 11px;
+}
+
+body[data-page="times"] .team-card button {
+  width: 100%;
+  margin-top: 4px;
+}
+
+body[data-page="times"] .team-empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 220px;
+  margin: 0;
+  padding: 30px 20px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: rgba(17, 21, 30, 0.78);
+  text-align: center;
+}
+
+body[data-page="times"] .team-empty-icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid rgba(255, 48, 79, 0.35);
+  border-radius: 50%;
+  background: rgba(255, 48, 79, 0.1);
+  color: var(--red-soft);
+  font-size: 22px;
+}
+
+body[data-page="times"] .team-empty-state h3,
+body[data-page="times"] .team-empty-state p {
+  margin: 0;
+}
+
+body[data-page="times"] .team-empty-state p {
+  max-width: 460px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+body[data-page="times"] #team-detail {
+  padding: 28px;
+}
+
+body[data-page="times"] .team-detail-header {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+body[data-page="times"] .team-detail-header h2 {
+  margin: 5px 0;
+  font-size: clamp(22px, 3vw, 30px);
+}
+
+body[data-page="times"] .team-detail-header p {
+  margin: 8px 0;
+  color: var(--muted);
+}
+
+body[data-page="times"] .team-detail-leader {
+  color: var(--text) !important;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+body[data-page="times"] .team-members-title {
+  margin: 22px 0 12px;
+}
+
+body[data-page="times"] .team-members-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+
+body[data-page="times"] .team-member-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+body[data-page="times"] .team-member-name {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-weight: 700;
+}
+
+body[data-page="times"] .team-member-role {
+  flex: 0 0 auto;
+  color: var(--red-soft);
+  font-size: 11px;
+}
+
+body[data-page="times"] .team-member-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 16px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  list-style: none;
+}
+
+body[data-page="times"] #team-detail > button {
+  margin-top: 20px;
+}
+
+body[data-page="times"] button:focus-visible,
+body[data-page="times"] input:focus-visible {
+  outline: 2px solid var(--red-soft);
+  outline-offset: 3px;
+}
+
+@media (max-width: 760px) {
+  body[data-page="times"] .team-card {
+    min-height: 0;
+  }
+
+  body[data-page="times"] .team-members-list {
+    grid-template-columns: 1fr;
+  }
+
+  body[data-page="times"] #team-detail {
+    padding: 20px;
+  }
+}
