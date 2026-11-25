@@ -25,20 +25,48 @@
     const filtrados = times.filter((time) =>
       `${time.nome || ''} ${time.descricao || ''}`.toLocaleLowerCase('pt-BR').includes(termo)
     );
+
+    const contador = criarElemento('p', 'team-results-count',
+      termo
+        ? `${filtrados.length} de ${times.length} equipe(s) encontrada(s).`
+        : `${times.length} equipe(s) disponível(is).`
+    );
+    const titulo = document.querySelector('.team-list-heading > div');
+    const contadorAtual = document.querySelector('.team-results-count');
+    if (contadorAtual) contadorAtual.replaceWith(contador);
+    else if (titulo) titulo.append(contador);
+
     if (!filtrados.length) {
-      lista.replaceChildren(criarElemento('p', 'empty-state',
-        times.length ? 'Nenhum time corresponde à sua busca.' : 'Nenhum time ativo encontrado.'));
+      const vazio = criarElemento('div', 'empty-state team-empty-state');
+      vazio.append(
+        criarElemento('span', 'team-empty-icon', '⚔'),
+        criarElemento('h3', '', times.length ? 'Nenhuma equipe encontrada' : 'Ainda não há equipes ativas'),
+        criarElemento('p', '', times.length
+          ? 'Tente pesquisar por outro nome ou descrição.'
+          : 'Quando houver equipes ativas, elas aparecerão aqui.')
+      );
+      if (times.length && termo) {
+        vazio.append(botao('Limpar pesquisa', () => {
+          busca.value = '';
+          renderizar();
+          busca.focus();
+        }));
+      }
+      lista.replaceChildren(vazio);
       return;
     }
+
     lista.replaceChildren(...filtrados.map((time) => {
       const cartao = criarElemento('article', 'content-card team-card');
+      const papel = time.meuPapel === 'lider'
+        ? 'Responsável pelo time'
+        : time.meuPapel === 'membro' ? 'Você participa deste time' : 'Time público';
       cartao.append(
+        criarElemento('span', 'team-card-tag', 'EQUIPE ATIVA'),
         criarElemento('h3', '', time.nome),
-        criarElemento('p', '', time.descricao || 'Sem descrição.'),
-        criarElemento('p', 'meta', `Integrantes ativos: ${time.integrantes}`),
-        criarElemento('p', 'team-role', time.meuPapel === 'lider'
-          ? 'Você é responsável por este time.'
-          : time.meuPapel === 'membro' ? 'Você participa deste time.' : 'Time público')
+        criarElemento('p', 'team-card-description', time.descricao || 'Sem descrição informada.'),
+        criarElemento('p', 'team-card-members', `Integrantes ativos: ${time.integrantes}`),
+        criarElemento('p', 'team-role', papel)
       );
       cartao.append(botao('Ver integrantes', () => carregarDetalhe(time.id)));
       return cartao;
@@ -66,21 +94,35 @@
     detalhe.replaceChildren(criarElemento('p', 'meta', 'Carregando integrantes...'));
     try {
       const { time } = await api(`times/${encodeURIComponent(id)}`);
-      detalhe.replaceChildren(
+      const cabecalho = criarElemento('div', 'team-detail-header');
+      cabecalho.append(
+        criarElemento('div', 'team-detail-kicker', 'DETALHES DA EQUIPE'),
         criarElemento('h2', '', time.nome),
-        criarElemento('p', '', time.descricao || 'Sem descrição.'),
-        criarElemento('p', 'meta', `Responsável: ${time.lider.nome || 'Jogador'}`),
-        criarElemento('h3', '', 'Integrantes')
+        criarElemento('p', '', time.descricao || 'Sem descrição informada.'),
+        criarElemento('p', 'team-detail-leader', `Responsável: ${time.lider.nome || 'Jogador'}`)
       );
-      const ul = criarElemento('ul');
+      const tituloIntegrantes = criarElemento('h3', 'team-members-title', 'Integrantes');
+      const ul = criarElemento('ul', 'team-members-list');
       for (const membro of time.membros) {
-        ul.append(criarElemento('li', '', `${membro.nome || 'Jogador'}${membro.funcao ? ` — ${membro.funcao}` : ''}`));
+        const item = criarElemento('li', 'team-member-item');
+        item.append(
+          criarElemento('span', 'team-member-name', membro.nome || 'Jogador'),
+          criarElemento('span', 'team-member-role', membro.funcao || 'Integrante')
+        );
+        ul.append(item);
       }
-      if (!time.membros.length) ul.append(criarElemento('li', '', 'Nenhum integrante ativo listado.'));
-      detalhe.append(ul, botao('Fechar detalhes', () => {
-        detalhe.hidden = true;
-        detalhe.replaceChildren();
-      }));
+      if (!time.membros.length) {
+        ul.append(criarElemento('li', 'team-member-empty', 'Nenhum integrante ativo listado.'));
+      }
+      detalhe.replaceChildren(
+        cabecalho,
+        tituloIntegrantes,
+        ul,
+        botao('Fechar detalhes', () => {
+          detalhe.hidden = true;
+          detalhe.replaceChildren();
+        })
+      );
     } catch (erro) {
       detalhe.replaceChildren(criarElemento('p', 'meta', erro.message));
     }
