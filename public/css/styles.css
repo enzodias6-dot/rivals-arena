@@ -1403,7 +1403,8 @@ html {
 }
 
 .social-youtube {
-  background: var(--panel-strong);
+  border-color: transparent;
+  background: #ff304f;
 }
 
 @media (max-width: 480px) {
