@@ -7,6 +7,8 @@
   const status = $('#team-status');
   const busca = $('#team-search');
   const atualizar = $('#refresh-teams');
+  const formulario = $('#team-create-form');
+  const botaoCriar = $('#create-team-submit');
   let times = [];
 
   function definirStatus(mensagem) {
@@ -43,7 +45,7 @@
         criarElemento('h3', '', times.length ? 'Nenhuma equipe encontrada' : 'Ainda não há equipes ativas'),
         criarElemento('p', '', times.length
           ? 'Tente pesquisar por outro nome ou descrição.'
-          : 'Quando houver equipes ativas, elas aparecerão aqui.')
+          : 'Crie a primeira equipe da comunidade e reúna seus combatentes.')
       );
       if (times.length && termo) {
         vazio.append(botao('Limpar pesquisa', () => {
@@ -128,7 +130,33 @@
     }
   }
 
+  async function criarTime(evento) {
+    evento.preventDefault();
+    if (!formulario.reportValidity()) return;
+
+    const dados = new FormData(formulario);
+    const nome = String(dados.get('nome') || '').trim();
+    const descricao = String(dados.get('descricao') || '').trim();
+    botaoCriar.disabled = true;
+    definirStatus('Criando seu time...');
+    try {
+      const resposta = await api('times', {
+        metodo: 'POST',
+        corpo: { nome, descricao }
+      });
+      formulario.reset();
+      definirStatus(resposta.mensagem || 'Time criado com sucesso.');
+      await carregarTimes();
+      if (resposta.time?.id) await carregarDetalhe(resposta.time.id);
+    } catch (erro) {
+      definirStatus(erro.message);
+    } finally {
+      botaoCriar.disabled = false;
+    }
+  }
+
   busca.addEventListener('input', renderizar);
   atualizar.addEventListener('click', carregarTimes);
+  formulario.addEventListener('submit', criarTime);
   carregarTimes();
 })();
