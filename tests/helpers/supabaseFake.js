@@ -568,33 +568,36 @@ function criarSupabaseFake({
         break;
       }
       case 'criar_time': {
-        const nomeTime = String(parametros.p_nome || '').trim();
-        const capacidade = parametros.p_max_integrantes;
+        const nomeTime = String(parametros.p_nome || '').trim().replace(/\s+/g, ' ');
+        const descricao = parametros.p_descricao == null ? null : String(parametros.p_descricao).trim() || null;
         if (nomeTime.length < 2 || nomeTime.length > 80 ||
-            !Number.isInteger(capacidade) || capacidade < 2 || capacidade > 5) {
+            (descricao !== null && descricao.length > 500)) {
           return Promise.resolve(falha('22023', 'invalid_team_data'));
         }
-        if (tabelas.times.some((time) => time.nome.toLowerCase() === nomeTime.toLowerCase())) {
-          return Promise.resolve(falha('23505', 'duplicate team name'));
+        if (!tabelas.usuarios.some((usuario) => usuario.id === usuarioId)) {
+          return Promise.resolve(falha('23503', 'profile_not_found'));
         }
+        const agora = new Date().toISOString();
         data = {
           id: randomUUID(),
           nome: nomeTime,
-          descricao: parametros.p_descricao || '',
-          lider_id: usuarioId,
-          max_integrantes: capacidade,
-          criado_em: new Date().toISOString(),
-          atualizado_em: new Date().toISOString()
+          descricao,
+          responsavel_id: usuarioId,
+          criado_em: agora,
+          atualizado_em: agora,
+          status: 'ativo',
+          publico: true
         };
         tabelas.times.push(data);
         tabelas.membros_time.push({
           id: randomUUID(),
           time_id: data.id,
-          jogador_id: usuarioId,
+          usuario_id: usuarioId,
+          funcao: 'membro',
           status: 'ativo',
-          entrou_em: new Date().toISOString(),
-          encerrou_em: null
+          entrou_em: agora
         });
+        data = data.id;
         break;
       }
       case 'atualizar_time': {
