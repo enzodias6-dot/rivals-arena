@@ -102,6 +102,100 @@ function criarRotasTimes() {
     });
   });
 
+  router.post('/times/:id/solicitacoes', async (req, res) => {
+    const timeId = lerUuid(req.params.id);
+    if (!timeId) return res.status(400).json({ mensagem: 'Time inválido.' });
+    const cliente = clienteDaRequisicao(req);
+    const { data, error } = await cliente.rpc('solicitar_entrada_time', { p_time_id: timeId });
+    if (error) {
+      const mensagens = {
+        already_team_member: [409, 'Você já faz parte desta equipe.'],
+        already_member: [409, 'Você já faz parte desta equipe.'],
+        team_not_available: [409, 'Esta equipe não está disponível para receber solicitações.'],
+        request_already_pending: [409, 'Você já tem uma solicitação pendente para esta equipe.'],
+        authentication_required: [401, 'Entre novamente para solicitar entrada.']
+      };
+      const [status, mensagem] = mensagens[error.message] || (
+        error.code === '23505' ? [409, 'Você já tem uma solicitação pendente para esta equipe.'] :
+        error.code === '42883' || error.code === 'PGRST202' ? [503, 'A função de solicitações ainda não está disponível no banco.'] :
+        [500, 'Não foi possível enviar sua solicitação. Tente novamente.']
+      );
+      return res.status(status).json({ mensagem });
+    }
+    return res.status(201).json({ mensagem: 'Solicitação enviada. Aguarde a aprovação do responsável.', solicitacao: { id: data } });
+  });
+
+  router.get('/times/minhas-solicitacoes', async (req, res) => {
+    const cliente = clienteDaRequisicao(req);
+    const { data: solicitacoes } = await executar(cliente.from('solicitacoes_time')
+      .select('id,time_id,status,criado_em,atualizado_em')
+      .eq('usuario_id', req.usuario.id)
+      .order('criado_em', { ascending: false }));
+    const ids = [...new Set((solicitacoes || []).map((item) => item.time_id))];
+    const { data: timesRelacionados } = ids.length
+      ? await executar(cliente.from('times').select('id,nome').in('id', ids))
+      : { data: [] };
+    const nomes = new Map((timesRelacionados || []).map((time) => [time.id, time.nome]));
+    return res.json({ solicitacoes: (solicitacoes || []).map((item) => ({
+      ...item, time_nome: nomes.get(item.time_id) || 'Equipe'
+    })) });
+  });
+
+  router.get('/times/solicitacoes/recebidas', async (req, res) => {
+    const cliente = clienteDaRequisicao(req);
+    const { data: meusTimes } = await executar(cliente.from('times')
+      .select('id,nome')
+      .eq('responsavel_id', req.usuario.id)
+      .eq('status', 'ativo'));
+    const ids = (meusTimes || []).map((time) => time.id);
+    if (!ids.length) return res.json({ solicitacoes: [] });
+    const { data: solicitacoes } = await executar(cliente.from('solicitacoes_time')
+      .select('id,time_id,usuario_id,status,criado_em')
+      .in('time_id', ids)
+      .eq('status', 'pendente')
+      .order('criado_em', { ascending: true }));
+    const usuarios = [...new Set((solicitacoes || []).map((item) => item.usuario_id))];
+    const { data: perfis } = usuarios.length
+      ? await executar(cliente.from('vw_perfis_publicos').select('id,nome').in('id', usuarios))
+      : { data: [] };
+    const nomesTimes = new Map((meusTimes || []).map((time) => [time.id, time.nome]));
+    const nomesUsuarios = new Map((perfis || []).map((perfil) => [perfil.id, perfil.nome]));
+    return res.json({ solicitacoes: (solicitacoes || []).map((item) => ({
+      ...item,
+      time_nome: nomesTimes.get(item.time_id) || 'Equipe',
+      jogador_nome: nomesUsuarios.get(item.usuario_id) || 'Jogador'
+    })) });
+  });
+
+  router.post('/times/solicitacoes/:id/responder', async (req, res) => {
+    const solicitacaoId = lerUuid(req.params.id);
+    const decisao = (req.body || {}).decisao;
+    if (!solicitacaoId || !['aprovar', 'recusar'].includes(decisao)) {
+      return res.status(400).json({ mensagem: 'Informe uma solicitação válida e escolha aprovar ou recusar.' });
+    }
+    const cliente = clienteDaRequisicao(req);
+    const { data, error } = await cliente.rpc('responder_solicitacao_time', {
+      p_solicitacao_id: solicitacaoId,
+      p_decisao: decisao
+    });
+    if (error) {
+      const mensagens = {
+        only_active_team_owner_can_decide: [403, 'Somente o responsável da equipe pode responder.'],
+        only_team_owner_can_decide: [403, 'Somente o responsável da equipe pode responder.'],
+        request_not_found: [404, 'Solicitação não encontrada.'],
+        request_already_decided: [409, 'Esta solicitação já foi respondida.'],
+        already_member: [409, 'Este jogador já faz parte da equipe.'],
+        member_previously_removed: [409, 'Este jogador possui um vínculo anterior que precisa ser verificado.']
+      };
+      const [status, mensagem] = mensagens[error.message] || (
+        error.code === '42883' || error.code === 'PGRST202' ? [503, 'A função de resposta ainda não está disponível no banco.'] :
+        [500, 'Não foi possível responder à solicitação. Tente novamente.']
+      );
+      return res.status(status).json({ mensagem });
+    }
+    return res.json({ mensagem: data === 'aprovada' ? 'Solicitação aprovada. Jogador adicionado à equipe.' : 'Solicitação recusada.', status: data });
+  });
+
   router.get('/times/:id', async (req, res) => {
     const timeId = lerUuid(req.params.id);
     if (!timeId) return res.status(400).json({ mensagem: 'Time inválido.' });
