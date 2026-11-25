@@ -70,7 +70,7 @@ function criarRotasTimes() {
       if (error.code === '23505') {
         return res.status(409).json({ mensagem: 'Não foi possível criar o time por conflito com um registro existente.' });
       }
-      if (error.code === '42883') {
+      if (error.code === '42883' || error.code === 'PGRST202') {
         return res.status(503).json({ mensagem: 'A criação de times ainda aguarda a aplicação da atualização aprovada no banco de dados.' });
       }
       if (error.status === 401) {
