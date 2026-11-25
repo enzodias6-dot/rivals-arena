@@ -109,7 +109,7 @@
         const item = criarElemento('li', 'team-member-item');
         item.append(
           criarElemento('span', 'team-member-name', membro.nome || 'Jogador'),
-          criarElemento('span', 'team-member-role', membro.funcao || 'Integrante')
+          criarElemento('span', 'team-member-role', membro.usuario_id === time.responsavel_id ? 'Responsável' : membro.funcao || 'Integrante')
         );
         ul.append(item);
       }
