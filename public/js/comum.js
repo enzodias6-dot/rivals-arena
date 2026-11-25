@@ -126,7 +126,8 @@
     const links = itensMenu.map(([destino, rotulo]) => {
       if (destino === '#sair') return `<a href="#" id="logout">${rotulo}</a>`;
       const ativo = itemAtivo(destino);
-      return `<a${ativo ? ' class="active" aria-current="page"' : ''} href="${raiz}${destino}">${rotulo}</a>`;
+      const destinoRelativo = raiz && destino.startsWith('pages/') ? destino.slice(6) : destino;
+      return `<a${ativo ? ' class="active" aria-current="page"' : ''} href="${raiz}${destinoRelativo}">${rotulo}</a>`;
     }).join('');
 
     cabecalho.innerHTML = `${logo(`${raiz}index.html`)}<button class="menu-toggle" type="button" aria-label="Abrir menu" aria-expanded="false" aria-controls="menu-principal">☰</button><nav id="menu-principal" aria-label="Menu principal">${links}</nav>`;
