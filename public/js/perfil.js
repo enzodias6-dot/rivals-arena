@@ -2,7 +2,7 @@
 (() => {
   'use strict';
 
-  const { $, api, criarElemento, formatarNumero, guardarUsuario, obterUsuario, raiz, sair } = window.RA;
+  const { $, api, criarElemento, formatarNumero, guardarUsuario, obterUsuario, raiz, sair, limparSessaoLocal } = window.RA;
 
   const caixa = $('#profile');
   const botaoEditarNome = $('#edit-profile-name');
