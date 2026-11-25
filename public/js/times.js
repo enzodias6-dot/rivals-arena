@@ -27,7 +27,7 @@
   // Formata apenas negrito simples sem interpretar HTML fornecido pelo usuário.
   function renderizarDescricao(elemento, descricao) {
     const texto = String(descricao || '');
-    const partes = texto.split(/(\\*\\*[^*]+\\*\\*)/g);
+    const partes = texto.split(/(\*\*[^*]+\*\*)/g);
     for (const parte of partes) {
       if (parte.startsWith('**') && parte.endsWith('**') && parte.length > 4) {
         const destaque = document.createElement('strong');
