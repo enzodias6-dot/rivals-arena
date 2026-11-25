@@ -1152,8 +1152,25 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
     code: 'signup_disabled',
     message: 'Signup disabled'
   });
+  const cadastro = await amb.chamar('POST', '/api/usuarios', {
+    corpo: { nome: 'Teste Bloqueado', email: 'bloqueado@teste.com', senha: 'senha-forte-123' }
+  });
+  assert.equal(cadastro.status, 403);
+  assert.doesNotMatch(cadastro.json.mensagem, /políticas de acesso/i);
 
-  test('Times consulta campos compatíveis com o schema confirmado e exige autenticação', async (t) => {
+  amb.supabase.falharAuth('signInWithPassword', {
+    status: 403,
+    code: 'user_banned',
+    message: 'User is banned'
+  });
+  const login = await amb.chamar('POST', '/api/login', {
+    corpo: { email: 'bloqueado@teste.com', senha: 'senha-forte-123' }
+  });
+  assert.equal(login.status, 403);
+  assert.doesNotMatch(login.json.mensagem, /políticas de acesso/i);
+});
+
+test('Times consulta campos compatíveis com o schema confirmado e exige autenticação', async (t) => {
     const amb = await criarAmbiente();
     t.after(amb.encerrar);
     const jogador = await amb.novoJogador('Consulta Times');
@@ -1418,24 +1435,6 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
     })).json.partidas.length, 0);
     assert.equal(amb.supabase.tabelas.usuarios.find((item) => item.id === jogador1.id).vitorias, 0);
   });
-  const cadastro = await amb.chamar('POST', '/api/usuarios', {
-    corpo: { nome: 'Teste Bloqueado', email: 'bloqueado@teste.com', senha: 'senha-forte-123' }
-  });
-  assert.equal(cadastro.status, 403);
-  assert.doesNotMatch(cadastro.json.mensagem, /políticas de acesso/i);
-
-  amb.supabase.falharAuth('signInWithPassword', {
-    status: 403,
-    code: 'user_banned',
-    message: 'User is banned'
-  });
-  const login = await amb.chamar('POST', '/api/login', {
-    corpo: { email: 'bloqueado@teste.com', senha: 'senha-forte-123' }
-  });
-  assert.equal(login.status, 403);
-  assert.doesNotMatch(login.json.mensagem, /políticas de acesso/i);
-});
-
 test('exclusão de conta permanece indisponível sem chave administrativa e preserva dados e sessão', async (t) => {
   const amb = await criarAmbiente();
   t.after(amb.encerrar);
