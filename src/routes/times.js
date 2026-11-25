@@ -2,13 +2,24 @@
 
 const express = require('express');
 const { executar, buscarTodasAsPaginas, clienteDaRequisicao } = require('../utils/supabase');
-const { lerUuid } = require('../utils/validacao');
+const { lerUuid, validarNome } = require('../utils/validacao');
+
+function validarDescricaoTime(valor) {
+  if (valor === undefined || valor === null || valor === '') return { valor: null };
+  if (typeof valor !== 'string') return { erro: 'A descrição deve ser um texto válido.' };
+  const descricao = valor.trim();
+  if (descricao.length > 500) return { erro: 'A descrição deve ter no máximo 500 caracteres.' };
+  if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(descricao)) {
+    return { erro: 'A descrição contém caracteres inválidos.' };
+  }
+  return { valor: descricao || null };
+}
 
 function criarRotasTimes() {
   const router = express.Router();
 
   // Consultas compatíveis com o schema confirmado: times.responsavel_id e
-  // membros_time.usuario_id. Não pressupõe RPCs/tabelas de solicitações inexistentes.
+  // membros_time.usuario_id. Não pressupõe tabelas de solicitações inexistentes.
   router.get('/times', async (req, res) => {
     const cliente = clienteDaRequisicao(req);
     const times = await buscarTodasAsPaginas(() => cliente.from('times')
@@ -31,6 +42,63 @@ function criarRotasTimes() {
           ? 'lider'
           : membrosDoUsuario.has(time.id) ? 'membro' : 'visitante'
       }))
+    });
+  });
+
+  router.post('/times', async (req, res) => {
+    const corpo = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
+      ? req.body
+      : {};
+    const nome = validarNome(corpo.nome, 'O nome do time');
+    if (nome.erro) return res.status(400).json({ mensagem: nome.erro });
+    const descricao = validarDescricaoTime(corpo.descricao);
+    if (descricao.erro) return res.status(400).json({ mensagem: descricao.erro });
+
+    const cliente = clienteDaRequisicao(req);
+    const { data: timeId, error } = await cliente.rpc('criar_time', {
+      p_nome: nome.valor,
+      p_descricao: descricao.valor
+    });
+
+    if (error) {
+      if (error.code === '42501' || error.status === 403) {
+        return res.status(403).json({ mensagem: 'Sua sessão não permite criar este time.' });
+      }
+      if (error.code === '22023') {
+        return res.status(400).json({ mensagem: 'Os dados informados não atendem às regras de criação do time.' });
+      }
+      if (error.code === '23505') {
+        return res.status(409).json({ mensagem: 'Não foi possível criar o time por conflito com um registro existente.' });
+      }
+      if (error.code === '42883') {
+        return res.status(503).json({ mensagem: 'A criação de times ainda aguarda a aplicação da atualização aprovada no banco de dados.' });
+      }
+      if (error.status === 401) {
+        return res.status(401).json({ mensagem: 'Sessão inválida ou expirada. Entre novamente.' });
+      }
+      if (error.status === 429) {
+        return res.status(429).json({ mensagem: 'Supabase limitou temporariamente as requisições. Aguarde e tente novamente.' });
+      }
+      const indisponivel = error.status >= 500 ||
+        error.name === 'AuthRetryableFetchError' ||
+        (error.name === 'TypeError' && /fetch failed|network/i.test(error.message || '')) ||
+        ['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT'].includes(error.code);
+      console.error('Falha ao criar time no Supabase:', error.code || error.name || 'erro desconhecido');
+      return res.status(indisponivel ? 503 : 500).json({
+        mensagem: indisponivel
+          ? 'Supabase indisponível. Confira a conexão e tente novamente.'
+          : 'Não foi possível criar o time. Tente novamente.'
+      });
+    }
+
+    if (typeof timeId !== 'string' || !lerUuid(timeId)) {
+      console.error('Falha ao criar time no Supabase: RPC não retornou um UUID válido.');
+      return res.status(500).json({ mensagem: 'Não foi possível confirmar a criação do time.' });
+    }
+
+    return res.status(201).json({
+      mensagem: 'Time criado com sucesso! Você já está cadastrado como responsável.',
+      time: { id: timeId, nome: nome.valor, descricao: descricao.valor }
     });
   });
 
