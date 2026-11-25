@@ -1449,6 +1449,25 @@ test('exclusão de conta permanece indisponível sem chave administrativa e pres
   assert.equal(perfil.status, 200);
 });
 
+test('falha na exclusão Auth restaura o perfil e mantém a sessão ativa', async (t) => {
+  const amb = await criarAmbiente({ adminAtivo: true });
+  t.after(amb.encerrar);
+  const jogador = await amb.novoJogador('Conta Com Falha', 'falha-excluir@teste.com');
+  amb.supabase.falharAuth('deleteUser', {
+    code: 'service_unavailable',
+    message: 'Falha simulada no Auth',
+    status: 503
+  });
+
+  const resposta = await amb.chamar('DELETE', '/api/conta', { cookie: jogador.cookie });
+  assert.equal(resposta.status, 503);
+  const perfil = amb.supabase.tabelas.usuarios.find((item) => item.id === jogador.id);
+  assert.equal(perfil.nome, 'Conta Com Falha');
+  assert.equal(perfil.email, 'falha-excluir@teste.com');
+  assert.equal(amb.supabase.usuarios.has(jogador.id), true);
+  assert.equal((await amb.chamar('GET', '/api/perfil', { cookie: jogador.cookie })).status, 200);
+});
+
 test('exclusão com cliente administrativo anonimiza o perfil, remove Auth e encerra a sessão', async (t) => {
   const amb = await criarAmbiente({ adminAtivo: true });
   t.after(amb.encerrar);
