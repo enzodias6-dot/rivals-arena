@@ -468,3 +468,43 @@ body[data-page="times"] #team-create-form .team-visibility-note {
 body[data-page="times"] #team-create-form button {
   min-height: 44px;
 }
+
+
+/* ---------- Solicitações de entrada em equipes ---------- */
+body[data-page="times"] .team-requests-panel {
+  margin: 28px 0;
+  padding: 24px;
+}
+body[data-page="times"] .team-request-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+body[data-page="times"] .team-request-info {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+body[data-page="times"] .team-request-info strong {
+  overflow-wrap: anywhere;
+}
+body[data-page="times"] .team-request-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+body[data-page="times"] .team-request-actions button {
+  min-width: 94px;
+}
+@media (max-width: 560px) {
+  body[data-page="times"] .team-request-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  body[data-page="times"] .team-request-actions button {
+    flex: 1;
+  }
+}
