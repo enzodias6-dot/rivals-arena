@@ -15,34 +15,6 @@
   let usuarioAtual = null;
   let nomeExibido = null;
 
-  const botaoExcluirConta = $('#delete-account-button');
-  const feedbackExclusao = $('#delete-account-feedback');
-
-  botaoExcluirConta.addEventListener('click', async () => {
-    const confirmou = window.confirm(
-      'Tem certeza de que deseja excluir definitivamente sua conta? Esta ação não pode ser desfeita.'
-    );
-    if (!confirmou) return;
-
-    const palavra = window.prompt('Para confirmar, digite EXCLUIR:');
-    if (palavra !== 'EXCLUIR') {
-      feedbackExclusao.textContent = 'Exclusão cancelada. A confirmação não correspondeu.';
-      return;
-    }
-
-    botaoExcluirConta.disabled = true;
-    feedbackExclusao.textContent = 'Solicitando a exclusão segura da conta...';
-    try {
-      const resposta = await api('conta', { metodo: 'DELETE' });
-      feedbackExclusao.textContent = resposta.mensagem || 'Conta excluída.';
-      window.RA.limparSessaoLocal();
-      window.location.replace(`${raiz}acesso.html`);
-    } catch (erro) {
-      feedbackExclusao.textContent = erro.message || 'Não foi possível excluir a conta.';
-      botaoExcluirConta.disabled = false;
-    }
-  });
-
   function mostrarFeedbackNome(texto, tipo = 'status') {
     feedbackNome.textContent = texto;
     feedbackNome.hidden = !texto;
