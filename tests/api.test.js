@@ -1493,3 +1493,59 @@ test('exclusão com cliente administrativo anonimiza o perfil, remove Auth e enc
   assert.ok(resposta.setCookie.some((valor) => valor.startsWith('ra_session=;')));
   assert.equal((await amb.chamar('GET', '/api/perfil', { cookie: jogador.cookie })).status, 401);
 });
+
+
+test('criação de time valida os dados e cadastra o criador como responsável e integrante', async (t) => {
+  const amb = await criarAmbiente();
+  t.after(amb.encerrar);
+  const jogador = await amb.novoJogador('Criador de Equipe');
+
+  const nomeInvalido = await amb.chamar('POST', '/api/times', {
+    cookie: jogador.cookie,
+    corpo: { nome: 'A', descricao: 'Descrição válida' }
+  });
+  assert.equal(nomeInvalido.status, 400);
+  assert.equal(amb.supabase.tabelas.times.length, 0);
+
+  const descricaoInvalida = await amb.chamar('POST', '/api/times', {
+    cookie: jogador.cookie,
+    corpo: { nome: 'Equipe Inválida', descricao: 'x'.repeat(501) }
+  });
+  assert.equal(descricaoInvalida.status, 400);
+  assert.equal(amb.supabase.tabelas.times.length, 0);
+
+  const criada = await amb.chamar('POST', '/api/times', {
+    cookie: jogador.cookie,
+    corpo: { nome: '  Guardiões   da Arena ', descricao: 'Equipe de testes.' }
+  });
+  assert.equal(criada.status, 201, criada.texto);
+  assert.equal(criada.json.time.nome, 'Guardiões da Arena');
+
+  const time = amb.supabase.tabelas.times[0];
+  assert.equal(time.id, criada.json.time.id);
+  assert.equal(time.responsavel_id, jogador.id);
+  assert.equal(time.status, 'ativo');
+  assert.equal(time.publico, true);
+
+  const membros = amb.supabase.tabelas.membros_time.filter((item) => item.time_id === time.id);
+  assert.equal(membros.length, 1);
+  assert.equal(membros[0].usuario_id, jogador.id);
+  assert.equal(membros[0].status, 'ativo');
+  assert.equal(membros[0].funcao, 'membro');
+
+  const listagem = await amb.chamar('GET', '/api/times', { cookie: jogador.cookie });
+  assert.equal(listagem.status, 200);
+  assert.equal(listagem.json.times.length, 1);
+  assert.equal(listagem.json.times[0].meuPapel, 'lider');
+  assert.equal(listagem.json.times[0].integrantes, 1);
+});
+
+test('criação de time exige sessão autenticada', async (t) => {
+  const amb = await criarAmbiente();
+  t.after(amb.encerrar);
+  const resposta = await amb.chamar('POST', '/api/times', {
+    corpo: { nome: 'Equipe Sem Sessão' }
+  });
+  assert.equal(resposta.status, 401);
+  assert.equal(amb.supabase.tabelas.times.length, 0);
+});
