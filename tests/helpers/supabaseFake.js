@@ -111,7 +111,7 @@ function criarSupabaseFake({
           return { data: { user: null }, error: errosAuth.get('getUser') };
         }
         const sessao = tokens.get(accessToken);
-        if (!sessao || tokensExpirados.has(accessToken)) {
+        if (!sessao || tokensExpirados.has(accessToken) || !usuarios.has(sessao.userId)) {
           return { data: { user: null }, error: respostaErro('session_not_found', 'Invalid JWT', 401) };
         }
         return { data: { user: usuarioPublico(usuarios.get(sessao.userId)) }, error: null };
@@ -176,9 +176,10 @@ function criarSupabaseFake({
   }
 
   class Consulta {
-    constructor(tabela, usuarioId) {
+    constructor(tabela, usuarioId, admin = false) {
       this.tabela = tabela;
       this.usuarioId = usuarioId;
+      this.admin = admin;
       this.filtros = [];
       this.ordenacoes = [];
       this.limite = Infinity;
@@ -287,7 +288,7 @@ function criarSupabaseFake({
         ? tabelas.usuarios
         : tabelas[this.tabela] || [];
 
-      if (this.tabela === 'usuarios') rows = rows.filter((linha) => linha.id === this.usuarioId);
+      if (this.tabela === 'usuarios' && !this.admin) rows = rows.filter((linha) => linha.id === this.usuarioId);
       if (this.tabela === 'desafios') rows = rows.filter((linha) =>
         linha.desafiante_id === this.usuarioId || linha.desafiado_id === this.usuarioId
       );
@@ -713,8 +714,27 @@ function criarSupabaseFake({
     tabelas[tabela].push({ id: randomUUID(), ...linha });
   }
 
+  function criarClienteAdmin() {
+    return {
+      from: (tabela) => new Consulta(tabela, null, true),
+      auth: {
+        admin: {
+          deleteUser: async (id) => {
+            if (errosAuth.has('deleteUser')) return { data: { user: null }, error: errosAuth.get('deleteUser') };
+            if (!usuarios.has(id)) return { data: { user: null }, error: respostaErro('user_not_found', 'User not found', 404) };
+            usuarios.delete(id);
+            for (const [token, sessao] of tokens) if (sessao.userId === id) tokens.delete(token);
+            for (const [token, sessao] of refreshTokens) if (sessao.userId === id) refreshTokens.delete(token);
+            return { data: { user: { id } }, error: null };
+          }
+        }
+      }
+    };
+  }
+
   return {
     criarCliente,
+    criarClienteAdmin,
     tabelas,
     usuarios,
     tokens,
