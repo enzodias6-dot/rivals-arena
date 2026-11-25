@@ -34,16 +34,30 @@ function criarRotasConta({ auth, criarClienteAdmin }) {
 
     // Mantém a linha e o UUID de usuarios: FKs de partidas, campeonatos e times
     // continuam válidas. Somente nome e email identificáveis são anonimizados.
-    const { error: erroAnonimizacao } = await admin.from('usuarios')
+    const { data: perfilAnonimizado, error: erroAnonimizacao } = await admin.from('usuarios')
       .update({ nome: 'Conta excluída', email: emailAnonimizado })
-      .eq('id', usuarioId);
+      .eq('id', usuarioId)
+      .select('id')
+      .maybeSingle();
 
     if (erroAnonimizacao) throw erroAnonimizacao;
+    if (!perfilAnonimizado?.id) {
+      return res.status(503).json({
+        mensagem: 'Não foi possível anonimizar o perfil. Nenhuma exclusão foi concluída.'
+      });
+    }
 
     // A exclusão do Auth é administrativa e ocorre somente no servidor.
-    const { error: erroExclusao } = await admin.auth.admin.deleteUser(usuarioId);
+    // Erros retornados ou exceções tentam compensar a anonimização anterior.
+    let erroExclusao = null;
+    try {
+      const resultado = await admin.auth.admin.deleteUser(usuarioId);
+      erroExclusao = resultado.error || null;
+    } catch (erro) {
+      erroExclusao = erro;
+    }
+
     if (erroExclusao) {
-      // Se o Auth não concluir, tenta restaurar os dados anteriores do perfil.
       const { error: erroRestauracao } = await admin.from('usuarios')
         .update({ nome: perfil.nome, email: perfil.email })
         .eq('id', usuarioId);
@@ -52,7 +66,7 @@ function criarRotasConta({ auth, criarClienteAdmin }) {
         console.error('Falha ao restaurar perfil após erro de exclusão Auth:', erroRestauracao.code || erroRestauracao.name);
       }
       return res.status(503).json({
-        mensagem: 'Não foi possível concluir a exclusão da conta. Sua solicitação não foi confirmada; tente novamente mais tarde.'
+        mensagem: 'Não foi possível confirmar a exclusão da conta. Se o serviço estiver instável, entre em contato com o suporte antes de tentar novamente.'
       });
     }
 
