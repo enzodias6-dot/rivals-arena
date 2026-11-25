@@ -617,52 +617,62 @@ function criarSupabaseFake({
       }
       case 'solicitar_entrada_time': {
         const time = timePorId(parametros.p_time_id);
-        if (!time) return Promise.resolve(falha('P0002', 'team_not_found'));
-        if (ativosDoTime(time.id).some((membro) => membro.jogador_id === usuarioId)) {
-          return Promise.resolve(falha('P0001', 'already_team_member'));
+        if (!time || time.status !== 'ativo' || time.publico !== true) {
+          return Promise.resolve(falha('P0001', 'team_not_available', 409));
         }
-        if (ativosDoTime(time.id).length >= time.max_integrantes) {
-          return Promise.resolve(falha('P0001', 'team_full'));
+        if (ativosDoTime(time.id).some((membro) => membro.usuario_id === usuarioId)) {
+          return Promise.resolve(falha('P0001', 'already_team_member', 409));
         }
-        if (tabelas.solicitacoes_time.some((item) =>
-          item.time_id === time.id && item.jogador_id === usuarioId && item.status === 'pendente'
-        )) return Promise.resolve(falha('23505', 'duplicate pending request'));
+        const pendente = tabelas.solicitacoes_time.find((item) =>
+          item.time_id === time.id && item.usuario_id === usuarioId && item.status === 'pendente'
+        );
+        if (pendente) {
+          pendente.atualizado_em = new Date().toISOString();
+          return Promise.resolve({ data: pendente.id, error: null });
+        }
+        const agora = new Date().toISOString();
         data = {
-          id: randomUUID(),
-          time_id: time.id,
-          jogador_id: usuarioId,
-          status: 'pendente',
-          criada_em: new Date().toISOString(),
-          decidida_em: null,
-          decidida_por: null
+          id: randomUUID(), time_id: time.id, usuario_id: usuarioId,
+          status: 'pendente', criado_em: agora, atualizado_em: agora,
+          respondido_por: null, respondido_em: null
         };
         tabelas.solicitacoes_time.push(data);
+        data = data.id;
         break;
       }
       case 'responder_solicitacao_time': {
         data = tabelas.solicitacoes_time.find((item) => item.id === parametros.p_solicitacao_id);
-        if (!data) return Promise.resolve(falha('P0002', 'request_not_found'));
+        if (!data) return Promise.resolve(falha('P0002', 'request_not_found', 404));
         const time = timePorId(data.time_id);
-        if (time?.lider_id !== usuarioId) return Promise.resolve(falha('42501', 'team_leader_required', 403));
-        if (data.status !== 'pendente') return Promise.resolve(falha('P0001', 'request_already_decided'));
-        if (parametros.p_aceitar) {
-          if (ativosDoTime(time.id).length >= time.max_integrantes) {
-            return Promise.resolve(falha('P0001', 'team_full'));
+        if (!time || time.responsavel_id !== usuarioId || time.status !== 'ativo') {
+          return Promise.resolve(falha('42501', 'only_active_team_owner_can_decide', 403));
+        }
+        if (data.status !== 'pendente') {
+          return Promise.resolve(falha('P0001', 'request_already_decided', 409));
+        }
+        if (time.publico !== true) return Promise.resolve(falha('P0001', 'team_not_available', 409));
+        if (parametros.p_decisao === 'aprovar') {
+          const vinculo = tabelas.membros_time.find((item) =>
+            item.time_id === time.id && item.usuario_id === data.usuario_id
+          );
+          const agora = new Date().toISOString();
+          if (vinculo) {
+            vinculo.status = 'ativo';
+            vinculo.entrou_em = agora;
+          } else {
+            tabelas.membros_time.push({
+              id: randomUUID(), time_id: time.id, usuario_id: data.usuario_id,
+              funcao: 'membro', status: 'ativo', entrou_em: agora
+            });
           }
-          tabelas.membros_time.push({
-            id: randomUUID(),
-            time_id: time.id,
-            jogador_id: data.jogador_id,
-            status: 'ativo',
-            entrou_em: new Date().toISOString(),
-            encerrou_em: null
-          });
         }
         Object.assign(data, {
-          status: parametros.p_aceitar ? 'aprovada' : 'recusada',
-          decidida_em: new Date().toISOString(),
-          decidida_por: usuarioId
+          status: parametros.p_decisao === 'aprovar' ? 'aprovada' : 'recusada',
+          respondido_por: usuarioId,
+          respondido_em: new Date().toISOString(),
+          atualizado_em: new Date().toISOString()
         });
+        data = data.status;
         break;
       }
       case 'sair_time': {
