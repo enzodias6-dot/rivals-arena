@@ -6,7 +6,10 @@
   const detalhe = $('#team-detail');
   const status = $('#team-status');
   const formularioCriacao = $('#team-create-form');
+  const buscaTimes = $('#team-search');
+  const botaoAtualizar = $('#refresh-teams');
   let timeSelecionadoId = null;
+  let timesCarregados = [];
 
   function definirStatus(mensagem) {
     status.textContent = mensagem;
@@ -34,31 +37,50 @@
     }
   }
 
-  async function carregarTimes() {
-    definirStatus('Carregando times...');
-    const { times } = await api('times');
+  function renderizarTimes() {
+    const termo = (buscaTimes?.value || '').trim().toLocaleLowerCase('pt-BR');
+    const times = timesCarregados.filter((time) =>
+      `${time.nome || ''} ${time.descricao || ''}`.toLocaleLowerCase('pt-BR').includes(termo)
+    );
+
     if (!times.length) {
-      lista.replaceChildren(criarElemento('p', 'meta', 'Nenhum time cadastrado.'));
-      definirStatus('');
+      lista.replaceChildren(criarElemento('p', 'empty-state',
+        timesCarregados.length ? 'Nenhum time corresponde à sua busca.' : 'Nenhum time cadastrado.'));
       return;
     }
+
     lista.replaceChildren(...times.map((time) => {
-      const cartao = criarElemento('article', 'content-card');
-      cartao.append(
-        criarElemento('h3', '', time.nome),
-        criarElemento('p', '', time.descricao || 'Sem descrição.'),
-        criarElemento('p', 'meta', `Integrantes: ${time.integrantes}/${time.max_integrantes}`),
-        criarElemento('p', 'meta', time.meuPapel === 'lider'
-          ? 'Você é líder deste time.'
-          : time.meuPapel === 'membro' ? 'Você participa deste time.' : 'Você ainda não participa deste time.')
-      );
+      const cartao = criarElemento('article', 'content-card team-card');
+      const titulo = criarElemento('h3', '', time.nome);
+      const descricao = criarElemento('p', '', time.descricao || 'Sem descrição.');
+      const integrantes = criarElemento('p', 'meta', `Integrantes: ${time.integrantes}/${time.max_integrantes}`);
+      const papel = criarElemento('p', 'team-role', time.meuPapel === 'lider'
+        ? 'Você é líder deste time.'
+        : time.meuPapel === 'membro' ? 'Você participa deste time.' : 'Você ainda não participa deste time.');
+      cartao.append(titulo, descricao, integrantes, papel);
       if (time.solicitacaoPendente) {
-        cartao.append(criarElemento('p', 'meta', 'Sua solicitação está pendente.'));
+        cartao.append(criarElemento('p', 'team-pending', 'Sua solicitação está pendente.'));
       }
-      cartao.append(botao('Ver detalhes', () => carregarDetalhe(time.id)));
+      cartao.append(botao('Ver detalhes', () => carregarDetalhe(time.id), 'button-primary compact'));
       return cartao;
     }));
-    definirStatus('');
+  }
+
+  async function carregarTimes() {
+    definirStatus('Carregando times...');
+    if (botaoAtualizar) botaoAtualizar.disabled = true;
+    try {
+      const { times } = await api('times');
+      timesCarregados = Array.isArray(times) ? times : [];
+      renderizarTimes();
+      definirStatus(`${timesCarregados.length} time(s) encontrado(s).`);
+    } catch (erro) {
+      lista.replaceChildren(criarElemento('p', 'empty-state', erro.message));
+      definirStatus(erro.message);
+      throw erro;
+    } finally {
+      if (botaoAtualizar) botaoAtualizar.disabled = false;
+    }
   }
 
   function montarFormularioEdicao(time) {
@@ -233,6 +255,11 @@
       formularioCriacao.reset();
       $('#team-capacity').value = '5';
     });
+  });
+
+  buscaTimes?.addEventListener('input', renderizarTimes);
+  botaoAtualizar?.addEventListener('click', () => {
+    carregarTimes().catch(() => {});
   });
 
   carregarTimes().catch((erro) => definirStatus(erro.message));
