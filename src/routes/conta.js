@@ -9,7 +9,7 @@ function criarRotasConta({ auth, criarClienteAdmin }) {
   router.delete('/conta', async (req, res) => {
     if (typeof criarClienteAdmin !== 'function') {
       return res.status(503).json({
-        mensagem: 'A exclusão de conta ainda não está configurada no servidor. Entre em contato com o responsável pelo sistema.'
+        mensagem: 'A exclusão de conta está temporariamente indisponível porque a configuração administrativa segura ainda não foi concluída. Entre em contato com o responsável pelo sistema.'
       });
     }
 
