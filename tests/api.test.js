@@ -1549,3 +1549,90 @@ test('criação de time exige sessão autenticada', async (t) => {
   assert.equal(resposta.status, 401);
   assert.equal(amb.supabase.tabelas.times.length, 0);
 });
+
+
+test('solicitações de entrada exigem aprovação do responsável e atualizam a associação', async (t) => {
+  const amb = await criarAmbiente();
+  t.after(amb.encerrar);
+  const responsavel = await amb.novoJogador('Responsável da Equipe');
+  const jogador = await amb.novoJogador('Jogador Solicitante');
+  const terceiro = await amb.novoJogador('Terceiro Jogador');
+
+  const criada = await amb.chamar('POST', '/api/times', {
+    cookie: responsavel.cookie,
+    corpo: { nome: 'Equipe com Aprovação', descricao: 'Equipe de teste' }
+  });
+  assert.equal(criada.status, 201, criada.texto);
+  const timeId = criada.json.time.id;
+
+  const semSessao = await amb.chamar('POST', `/api/times/${timeId}/solicitacoes`);
+  assert.equal(semSessao.status, 401);
+
+  const enviada = await amb.chamar('POST', `/api/times/${timeId}/solicitacoes`, {
+    cookie: jogador.cookie, corpo: {}
+  });
+  assert.equal(enviada.status, 201, enviada.texto);
+  assert.match(enviada.json.mensagem, /aguarde a aprovação/i);
+  const solicitacaoId = enviada.json.solicitacao.id;
+  assert.ok(amb.supabase.tabelas.solicitacoes_time.some((item) =>
+    item.id === solicitacaoId && item.usuario_id === jogador.id && item.status === 'pendente'
+  ));
+
+  const minhas = await amb.chamar('GET', '/api/times/minhas-solicitacoes', { cookie: jogador.cookie });
+  assert.equal(minhas.status, 200);
+  assert.equal(minhas.json.solicitacoes[0].time_nome, 'Equipe com Aprovação');
+
+  const recebidas = await amb.chamar('GET', '/api/times/solicitacoes/recebidas', { cookie: responsavel.cookie });
+  assert.equal(recebidas.status, 200);
+  assert.equal(recebidas.json.solicitacoes.length, 1);
+  assert.equal(recebidas.json.solicitacoes[0].jogador_nome, 'Jogador Solicitante');
+
+  const tentativaTerceiro = await amb.chamar('POST', `/api/times/solicitacoes/${solicitacaoId}/responder`, {
+    cookie: terceiro.cookie, corpo: { decisao: 'aprovar' }
+  });
+  assert.equal(tentativaTerceiro.status, 403);
+  assert.equal(amb.supabase.tabelas.solicitacoes_time[0].status, 'pendente');
+
+  const duplicada = await amb.chamar('POST', `/api/times/${timeId}/solicitacoes`, {
+    cookie: jogador.cookie, corpo: {}
+  });
+  assert.equal(duplicada.status, 409);
+
+  const aprovada = await amb.chamar('POST', `/api/times/solicitacoes/${solicitacaoId}/responder`, {
+    cookie: responsavel.cookie, corpo: { decisao: 'aprovar' }
+  });
+  assert.equal(aprovada.status, 200, aprovada.texto);
+  assert.equal(aprovada.json.status, 'aprovada');
+  assert.equal(amb.supabase.tabelas.solicitacoes_time[0].respondido_por, responsavel.id);
+  assert.ok(amb.supabase.tabelas.membros_time.some((item) =>
+    item.time_id === timeId && item.usuario_id === jogador.id && item.status === 'ativo'
+  ));
+
+  const repetida = await amb.chamar('POST', `/api/times/solicitacoes/${solicitacaoId}/responder`, {
+    cookie: responsavel.cookie, corpo: { decisao: 'recusar' }
+  });
+  assert.equal(repetida.status, 409);
+});
+
+test('recusar solicitação não adiciona o jogador à equipe', async (t) => {
+  const amb = await criarAmbiente();
+  t.after(amb.encerrar);
+  const responsavel = await amb.novoJogador('Responsável que Recusa');
+  const jogador = await amb.novoJogador('Jogador Recusado');
+  const criada = await amb.chamar('POST', '/api/times', {
+    cookie: responsavel.cookie, corpo: { nome: 'Equipe que Recusa' }
+  });
+  const timeId = criada.json.time.id;
+  const enviada = await amb.chamar('POST', `/api/times/${timeId}/solicitacoes`, {
+    cookie: jogador.cookie, corpo: {}
+  });
+  const resposta = await amb.chamar('POST', `/api/times/solicitacoes/${enviada.json.solicitacao.id}/responder`, {
+    cookie: responsavel.cookie, corpo: { decisao: 'recusar' }
+  });
+  assert.equal(resposta.status, 200, resposta.texto);
+  assert.equal(resposta.json.status, 'recusada');
+  assert.equal(amb.supabase.tabelas.solicitacoes_time[0].respondido_por, responsavel.id);
+  assert.equal(amb.supabase.tabelas.membros_time.some((item) =>
+    item.time_id === timeId && item.usuario_id === jogador.id
+  ), false);
+});
