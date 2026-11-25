@@ -7,7 +7,11 @@
   const status = $('#team-status');
   const busca = $('#team-search');
   const atualizar = $('#refresh-teams');
+  const formulario = $('#team-create-form');
+  const botaoCriar = $('#create-team-submit');
   let times = [];
+  let minhasSolicitacoes = [];
+  let solicitacoesRecebidas = [];
 
   function definirStatus(mensagem) {
     status.textContent = mensagem;
@@ -43,7 +47,7 @@
         criarElemento('h3', '', times.length ? 'Nenhuma equipe encontrada' : 'Ainda não há equipes ativas'),
         criarElemento('p', '', times.length
           ? 'Tente pesquisar por outro nome ou descrição.'
-          : 'Quando houver equipes ativas, elas aparecerão aqui.')
+          : 'Crie a primeira equipe da comunidade e reúna seus combatentes.')
       );
       if (times.length && termo) {
         vazio.append(botao('Limpar pesquisa', () => {
@@ -68,6 +72,12 @@
         criarElemento('p', 'team-card-members', `Integrantes ativos: ${time.integrantes}`),
         criarElemento('p', 'team-role', papel)
       );
+      if (time.meuPapel === 'visitante') {
+        const pendente = minhasSolicitacoes.some((item) => item.time_id === time.id && item.status === 'pendente');
+        cartao.append(pendente
+          ? criarElemento('p', 'team-pending', 'Solicitação pendente')
+          : botao('Solicitar entrada', () => solicitarEntrada(time.id)));
+      }
       cartao.append(botao('Ver integrantes', () => carregarDetalhe(time.id)));
       return cartao;
     }));
@@ -77,15 +87,74 @@
     atualizar.disabled = true;
     definirStatus('Carregando times...');
     try {
-      const resposta = await api('times');
+      const [resposta, minhas, recebidas] = await Promise.all([
+        api('times'),
+        api('times/minhas-solicitacoes'),
+        api('times/solicitacoes/recebidas')
+      ]);
       times = Array.isArray(resposta.times) ? resposta.times : [];
+      minhasSolicitacoes = Array.isArray(minhas.solicitacoes) ? minhas.solicitacoes : [];
+      solicitacoesRecebidas = Array.isArray(recebidas.solicitacoes) ? recebidas.solicitacoes : [];
       renderizar();
+      renderizarSolicitacoesRecebidas();
       definirStatus(`${times.length} time(s) ativo(s) encontrado(s).`);
     } catch (erro) {
       lista.replaceChildren(criarElemento('p', 'empty-state', erro.message));
       definirStatus(erro.message);
     } finally {
       atualizar.disabled = false;
+    }
+  }
+
+  async function solicitarEntrada(timeId) {
+    try {
+      const resposta = await api('times/' + encodeURIComponent(timeId) + '/solicitacoes', { metodo: 'POST', corpo: {} });
+      definirStatus(resposta.mensagem || 'Solicitação enviada.');
+      await carregarTimes();
+    } catch (erro) {
+      definirStatus(erro.message);
+    }
+  }
+
+  function renderizarSolicitacoesRecebidas() {
+    const anterior = document.querySelector('#team-requests-panel');
+    if (anterior) anterior.remove();
+    if (!solicitacoesRecebidas.length) return;
+    const painel = criarElemento('section', 'panel team-requests-panel');
+    painel.id = 'team-requests-panel';
+    painel.append(
+      criarElemento('h2', '', 'Solicitações recebidas'),
+      criarElemento('p', 'meta', 'Analise os pedidos de jogadores que desejam entrar nas suas equipes.')
+    );
+    for (const pedido of solicitacoesRecebidas) {
+      const linha = criarElemento('div', 'team-request-row');
+      const info = criarElemento('div', 'team-request-info');
+      info.append(
+        criarElemento('strong', '', pedido.jogador_nome),
+        criarElemento('span', 'meta', 'Equipe: ' + pedido.time_nome)
+      );
+      const acoes = criarElemento('div', 'team-request-actions');
+      acoes.append(
+        botao('Aprovar', () => responderSolicitacao(pedido.id, 'aprovar')),
+        botao('Recusar', () => responderSolicitacao(pedido.id, 'recusar'))
+      );
+      linha.append(info, acoes);
+      painel.append(linha);
+    }
+    const conteudo = document.querySelector('.page-content');
+    const listaTimes = document.querySelector('.team-list-section');
+    conteudo.insertBefore(painel, listaTimes);
+  }
+
+  async function responderSolicitacao(id, decisao) {
+    try {
+      const resposta = await api('times/solicitacoes/' + encodeURIComponent(id) + '/responder', {
+        metodo: 'POST', corpo: { decisao }
+      });
+      definirStatus(resposta.mensagem);
+      await carregarTimes();
+    } catch (erro) {
+      definirStatus(erro.message);
     }
   }
 
@@ -107,7 +176,7 @@
         const item = criarElemento('li', 'team-member-item');
         item.append(
           criarElemento('span', 'team-member-name', membro.nome || 'Jogador'),
-          criarElemento('span', 'team-member-role', membro.funcao || 'Integrante')
+          criarElemento('span', 'team-member-role', membro.usuario_id === time.responsavel_id ? 'Responsável' : membro.funcao || 'Integrante')
         );
         ul.append(item);
       }
@@ -128,7 +197,33 @@
     }
   }
 
+  async function criarTime(evento) {
+    evento.preventDefault();
+    if (!formulario.reportValidity()) return;
+
+    const dados = new FormData(formulario);
+    const nome = String(dados.get('nome') || '').trim();
+    const descricao = String(dados.get('descricao') || '').trim();
+    botaoCriar.disabled = true;
+    definirStatus('Criando seu time...');
+    try {
+      const resposta = await api('times', {
+        metodo: 'POST',
+        corpo: { nome, descricao }
+      });
+      formulario.reset();
+      definirStatus(resposta.mensagem || 'Time criado com sucesso.');
+      await carregarTimes();
+      if (resposta.time?.id) await carregarDetalhe(resposta.time.id);
+    } catch (erro) {
+      definirStatus(erro.message);
+    } finally {
+      botaoCriar.disabled = false;
+    }
+  }
+
   busca.addEventListener('input', renderizar);
   atualizar.addEventListener('click', carregarTimes);
+  formulario.addEventListener('submit', criarTime);
   carregarTimes();
 })();

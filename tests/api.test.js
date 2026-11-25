@@ -1152,8 +1152,25 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
     code: 'signup_disabled',
     message: 'Signup disabled'
   });
+  const cadastro = await amb.chamar('POST', '/api/usuarios', {
+    corpo: { nome: 'Teste Bloqueado', email: 'bloqueado@teste.com', senha: 'senha-forte-123' }
+  });
+  assert.equal(cadastro.status, 403);
+  assert.doesNotMatch(cadastro.json.mensagem, /políticas de acesso/i);
 
-  test('Times consulta campos compatíveis com o schema confirmado e exige autenticação', async (t) => {
+  amb.supabase.falharAuth('signInWithPassword', {
+    status: 403,
+    code: 'user_banned',
+    message: 'User is banned'
+  });
+  const login = await amb.chamar('POST', '/api/login', {
+    corpo: { email: 'bloqueado@teste.com', senha: 'senha-forte-123' }
+  });
+  assert.equal(login.status, 403);
+  assert.doesNotMatch(login.json.mensagem, /políticas de acesso/i);
+});
+
+test('Times consulta campos compatíveis com o schema confirmado e exige autenticação', async (t) => {
     const amb = await criarAmbiente();
     t.after(amb.encerrar);
     const jogador = await amb.novoJogador('Consulta Times');
@@ -1418,24 +1435,6 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
     })).json.partidas.length, 0);
     assert.equal(amb.supabase.tabelas.usuarios.find((item) => item.id === jogador1.id).vitorias, 0);
   });
-  const cadastro = await amb.chamar('POST', '/api/usuarios', {
-    corpo: { nome: 'Teste Bloqueado', email: 'bloqueado@teste.com', senha: 'senha-forte-123' }
-  });
-  assert.equal(cadastro.status, 403);
-  assert.doesNotMatch(cadastro.json.mensagem, /políticas de acesso/i);
-
-  amb.supabase.falharAuth('signInWithPassword', {
-    status: 403,
-    code: 'user_banned',
-    message: 'User is banned'
-  });
-  const login = await amb.chamar('POST', '/api/login', {
-    corpo: { email: 'bloqueado@teste.com', senha: 'senha-forte-123' }
-  });
-  assert.equal(login.status, 403);
-  assert.doesNotMatch(login.json.mensagem, /políticas de acesso/i);
-});
-
 test('exclusão de conta permanece indisponível sem chave administrativa e preserva dados e sessão', async (t) => {
   const amb = await criarAmbiente();
   t.after(amb.encerrar);
@@ -1492,4 +1491,153 @@ test('exclusão com cliente administrativo anonimiza o perfil, remove Auth e enc
   assert.ok(amb.supabase.tabelas.partidas.some((item) => item.id === partidaId && item.jogador_1_id === jogador.id));
   assert.ok(resposta.setCookie.some((valor) => valor.startsWith('ra_session=;')));
   assert.equal((await amb.chamar('GET', '/api/perfil', { cookie: jogador.cookie })).status, 401);
+});
+
+
+test('criação de time valida os dados e cadastra o criador como responsável e integrante', async (t) => {
+  const amb = await criarAmbiente();
+  t.after(amb.encerrar);
+  const jogador = await amb.novoJogador('Criador de Equipe');
+
+  const nomeInvalido = await amb.chamar('POST', '/api/times', {
+    cookie: jogador.cookie,
+    corpo: { nome: 'A', descricao: 'Descrição válida' }
+  });
+  assert.equal(nomeInvalido.status, 400);
+  assert.equal(amb.supabase.tabelas.times.length, 0);
+
+  const descricaoInvalida = await amb.chamar('POST', '/api/times', {
+    cookie: jogador.cookie,
+    corpo: { nome: 'Equipe Inválida', descricao: 'x'.repeat(501) }
+  });
+  assert.equal(descricaoInvalida.status, 400);
+  assert.equal(amb.supabase.tabelas.times.length, 0);
+
+  const criada = await amb.chamar('POST', '/api/times', {
+    cookie: jogador.cookie,
+    corpo: { nome: '  Guardiões   da Arena ', descricao: 'Equipe de testes.' }
+  });
+  assert.equal(criada.status, 201, criada.texto);
+  assert.equal(criada.json.time.nome, 'Guardiões da Arena');
+
+  const time = amb.supabase.tabelas.times[0];
+  assert.equal(time.id, criada.json.time.id);
+  assert.equal(time.responsavel_id, jogador.id);
+  assert.equal(time.status, 'ativo');
+  assert.equal(time.publico, true);
+
+  const membros = amb.supabase.tabelas.membros_time.filter((item) => item.time_id === time.id);
+  assert.equal(membros.length, 1);
+  assert.equal(membros[0].usuario_id, jogador.id);
+  assert.equal(membros[0].status, 'ativo');
+  assert.equal(membros[0].funcao, 'membro');
+
+  const listagem = await amb.chamar('GET', '/api/times', { cookie: jogador.cookie });
+  assert.equal(listagem.status, 200);
+  assert.equal(listagem.json.times.length, 1);
+  assert.equal(listagem.json.times[0].meuPapel, 'lider');
+  assert.equal(listagem.json.times[0].integrantes, 1);
+});
+
+test('criação de time exige sessão autenticada', async (t) => {
+  const amb = await criarAmbiente();
+  t.after(amb.encerrar);
+  const resposta = await amb.chamar('POST', '/api/times', {
+    corpo: { nome: 'Equipe Sem Sessão' }
+  });
+  assert.equal(resposta.status, 401);
+  assert.equal(amb.supabase.tabelas.times.length, 0);
+});
+
+
+test('solicitações de entrada exigem aprovação do responsável e atualizam a associação', async (t) => {
+  const amb = await criarAmbiente();
+  t.after(amb.encerrar);
+  const responsavel = await amb.novoJogador('Responsável da Equipe');
+  const jogador = await amb.novoJogador('Jogador Solicitante');
+  const terceiro = await amb.novoJogador('Terceiro Jogador');
+
+  const criada = await amb.chamar('POST', '/api/times', {
+    cookie: responsavel.cookie,
+    corpo: { nome: 'Equipe com Aprovação', descricao: 'Equipe de teste' }
+  });
+  assert.equal(criada.status, 201, criada.texto);
+  const timeId = criada.json.time.id;
+
+  const semSessao = await amb.chamar('POST', `/api/times/${timeId}/solicitacoes`);
+  assert.equal(semSessao.status, 401);
+
+  const enviada = await amb.chamar('POST', `/api/times/${timeId}/solicitacoes`, {
+    cookie: jogador.cookie, corpo: {}
+  });
+  assert.equal(enviada.status, 201, enviada.texto);
+  assert.match(enviada.json.mensagem, /aguarde a aprovação/i);
+  const solicitacaoId = enviada.json.solicitacao.id;
+  assert.ok(amb.supabase.tabelas.solicitacoes_time.some((item) =>
+    item.id === solicitacaoId && item.usuario_id === jogador.id && item.status === 'pendente'
+  ));
+
+  const minhas = await amb.chamar('GET', '/api/times/minhas-solicitacoes', { cookie: jogador.cookie });
+  assert.equal(minhas.status, 200);
+  assert.equal(minhas.json.solicitacoes[0].time_nome, 'Equipe com Aprovação');
+
+  const recebidas = await amb.chamar('GET', '/api/times/solicitacoes/recebidas', { cookie: responsavel.cookie });
+  assert.equal(recebidas.status, 200);
+  assert.equal(recebidas.json.solicitacoes.length, 1);
+  assert.equal(recebidas.json.solicitacoes[0].jogador_nome, 'Jogador Solicitante');
+
+  const tentativaTerceiro = await amb.chamar('POST', `/api/times/solicitacoes/${solicitacaoId}/responder`, {
+    cookie: terceiro.cookie, corpo: { decisao: 'aprovar' }
+  });
+  assert.equal(tentativaTerceiro.status, 403);
+  assert.equal(amb.supabase.tabelas.solicitacoes_time[0].status, 'pendente');
+
+  const duplicada = await amb.chamar('POST', `/api/times/${timeId}/solicitacoes`, {
+    cookie: jogador.cookie, corpo: {}
+  });
+  // A RPC usa ON CONFLICT ... DO UPDATE: repetir o pedido mantém a mesma
+  // solicitação pendente e retorna seu identificador, sem criar outra linha.
+  assert.equal(duplicada.status, 201, duplicada.texto);
+  assert.equal(duplicada.json.solicitacao.id, solicitacaoId);
+  assert.equal(amb.supabase.tabelas.solicitacoes_time.filter((item) =>
+    item.time_id === timeId && item.usuario_id === jogador.id && item.status === 'pendente'
+  ).length, 1);
+
+  const aprovada = await amb.chamar('POST', `/api/times/solicitacoes/${solicitacaoId}/responder`, {
+    cookie: responsavel.cookie, corpo: { decisao: 'aprovar' }
+  });
+  assert.equal(aprovada.status, 200, aprovada.texto);
+  assert.equal(aprovada.json.status, 'aprovada');
+  assert.equal(amb.supabase.tabelas.solicitacoes_time[0].respondido_por, responsavel.id);
+  assert.ok(amb.supabase.tabelas.membros_time.some((item) =>
+    item.time_id === timeId && item.usuario_id === jogador.id && item.status === 'ativo'
+  ));
+
+  const repetida = await amb.chamar('POST', `/api/times/solicitacoes/${solicitacaoId}/responder`, {
+    cookie: responsavel.cookie, corpo: { decisao: 'recusar' }
+  });
+  assert.equal(repetida.status, 409);
+});
+
+test('recusar solicitação não adiciona o jogador à equipe', async (t) => {
+  const amb = await criarAmbiente();
+  t.after(amb.encerrar);
+  const responsavel = await amb.novoJogador('Responsável que Recusa');
+  const jogador = await amb.novoJogador('Jogador Recusado');
+  const criada = await amb.chamar('POST', '/api/times', {
+    cookie: responsavel.cookie, corpo: { nome: 'Equipe que Recusa' }
+  });
+  const timeId = criada.json.time.id;
+  const enviada = await amb.chamar('POST', `/api/times/${timeId}/solicitacoes`, {
+    cookie: jogador.cookie, corpo: {}
+  });
+  const resposta = await amb.chamar('POST', `/api/times/solicitacoes/${enviada.json.solicitacao.id}/responder`, {
+    cookie: responsavel.cookie, corpo: { decisao: 'recusar' }
+  });
+  assert.equal(resposta.status, 200, resposta.texto);
+  assert.equal(resposta.json.status, 'recusada');
+  assert.equal(amb.supabase.tabelas.solicitacoes_time[0].respondido_por, responsavel.id);
+  assert.equal(amb.supabase.tabelas.membros_time.some((item) =>
+    item.time_id === timeId && item.usuario_id === jogador.id
+  ), false);
 });

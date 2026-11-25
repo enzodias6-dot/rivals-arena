@@ -1,0 +1,34 @@
+name: Testes automatizados
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+      - feat/criacao-times
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    name: Verificações e testes da aplicação
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Executar verificações e testes
+        run: npm test

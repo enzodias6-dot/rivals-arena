@@ -22,9 +22,17 @@
       <p class="meta" role="note">Consulte equipes ativas, pesquise pelo nome ou descrição e visualize seus integrantes.</p>
       <p id="team-status" class="team-status" role="status" aria-live="polite"></p>
 
-      <section class="panel" aria-labelledby="team-schema-note">
-        <h2 id="team-schema-note">Consulta de equipes</h2>
-        <p class="meta">Nesta versão, você pode consultar equipes ativas e visualizar seus integrantes. A criação e o gerenciamento serão habilitados após a implementação e validação das regras de equipe no banco de dados.</p>
+      <section class="panel team-create-panel" aria-labelledby="team-create-heading">
+        <h2 id="team-create-heading">Criar uma equipe</h2>
+        <p class="meta">Monte seu time e reúna outros combatentes. Ao criar, você será cadastrado automaticamente como responsável.</p>
+        <form id="team-create-form">
+          <label for="team-name">Nome da equipe</label>
+          <input id="team-name" name="nome" type="text" minlength="2" maxlength="80" required autocomplete="off" placeholder="Ex.: Lendas da Arena">
+          <label for="team-description">Descrição <span class="meta">(opcional)</span></label>
+          <textarea id="team-description" name="descricao" maxlength="500" rows="3" placeholder="Conte um pouco sobre sua equipe..."></textarea>
+          <p class="meta team-visibility-note">As equipes criadas nesta etapa serão públicas e aparecerão na lista de Times.</p>
+          <button class="button-primary compact" id="create-team-submit" type="submit">Criar equipe</button>
+        </form>
       </section>
 
       <section class="team-list-section" aria-labelledby="team-list-heading">
