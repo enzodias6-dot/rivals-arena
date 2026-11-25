@@ -2,7 +2,7 @@
 
 const express = require('express');
 
-function criarRotasConta() {
+function criarRotasConta({ auth }) {
   const router = express.Router();
 
   // A função SQL usa auth.uid(), portanto a conta removida é sempre a do token autenticado.
@@ -21,7 +21,7 @@ function criarRotasConta() {
     }
 
     // Só encerra a sessão depois de o banco confirmar a exclusão.
-    req.app.locals.auth.encerrarSessao(req, res);
+    auth.encerrarSessao(req, res);
     return res.json({ mensagem: 'Sua conta foi excluída com sucesso.' });
   });
 
