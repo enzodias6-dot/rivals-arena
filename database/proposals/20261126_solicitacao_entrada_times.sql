@@ -145,8 +145,15 @@ begin
       raise exception 'membership_record_already_exists' using errcode = '23505';
     end if;
 
-    insert into public.membros_time (time_id, usuario_id, funcao, status)
-    values (v_solicitacao.time_id, v_solicitacao.usuario_id, 'membro', 'ativo');
+    update public.membros_time
+    set status = 'ativo'
+    where time_id = v_solicitacao.time_id
+      and usuario_id = v_solicitacao.usuario_id;
+
+    if not found then
+      insert into public.membros_time (time_id, usuario_id, funcao, status)
+      values (v_solicitacao.time_id, v_solicitacao.usuario_id, 'membro', 'ativo');
+    end if;
 
     update public.solicitacoes_time
     set status = 'aprovada',
