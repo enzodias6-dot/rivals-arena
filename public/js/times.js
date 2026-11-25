@@ -24,6 +24,21 @@
     return elemento;
   }
 
+  // Formata apenas negrito simples sem interpretar HTML fornecido pelo usuário.
+  function renderizarDescricao(elemento, descricao) {
+    const texto = String(descricao || '');
+    const partes = texto.split(/(\\*\\*[^*]+\\*\\*)/g);
+    for (const parte of partes) {
+      if (parte.startsWith('**') && parte.endsWith('**') && parte.length > 4) {
+        const destaque = document.createElement('strong');
+        destaque.textContent = parte.slice(2, -2);
+        elemento.append(destaque);
+      } else if (parte) {
+        elemento.append(document.createTextNode(parte));
+      }
+    }
+  }
+
   function renderizar() {
     const termo = (busca.value || '').trim().toLocaleLowerCase('pt-BR');
     const filtrados = times.filter((time) =>
@@ -65,10 +80,12 @@
       const papel = time.meuPapel === 'lider'
         ? 'Responsável pelo time'
         : time.meuPapel === 'membro' ? 'Você participa deste time' : 'Time público';
+      const descricao = criarElemento('p', 'team-card-description');
+      renderizarDescricao(descricao, time.descricao || 'Sem descrição informada.');
       cartao.append(
         criarElemento('span', 'team-card-tag', 'EQUIPE ATIVA'),
         criarElemento('h3', '', time.nome),
-        criarElemento('p', 'team-card-description', time.descricao || 'Sem descrição informada.'),
+        descricao,
         criarElemento('p', 'team-card-members', `Integrantes ativos: ${time.integrantes}`),
         criarElemento('p', 'team-role', papel)
       );
@@ -164,10 +181,12 @@
     try {
       const { time } = await api(`times/${encodeURIComponent(id)}`);
       const cabecalho = criarElemento('div', 'team-detail-header');
+      const descricao = criarElemento('p', '');
+      renderizarDescricao(descricao, time.descricao || 'Sem descrição informada.');
       cabecalho.append(
         criarElemento('div', 'team-detail-kicker', 'DETALHES DA EQUIPE'),
         criarElemento('h2', '', time.nome),
-        criarElemento('p', '', time.descricao || 'Sem descrição informada.'),
+        descricao,
         criarElemento('p', 'team-detail-leader', `Responsável: ${time.lider.nome || 'Jogador'}`)
       );
       const tituloIntegrantes = criarElemento('h3', 'team-members-title', 'Integrantes');
