@@ -22,22 +22,9 @@
       <p class="meta" role="note">Crie sua equipe, encontre outros combatentes e gerencie solicitações de entrada. O limite máximo configurável nesta versão é de cinco integrantes.</p>
       <p id="team-status" class="team-status" role="status" aria-live="polite"></p>
 
-      <section class="panel" aria-labelledby="team-create-heading">
-        <h2 id="team-create-heading">Criar time</h2>
-        <form id="team-create-form">
-          <label for="team-name">Nome</label>
-          <input id="team-name" name="nome" maxlength="80" required>
-          <label for="team-description">Descrição</label>
-          <textarea id="team-description" name="descricao" maxlength="1000" rows="3"></textarea>
-          <label for="team-capacity">Limite proposto de integrantes</label>
-          <select id="team-capacity" name="max_integrantes">
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5" selected>5</option>
-          </select>
-          <button class="button-primary" type="submit">Criar time</button>
-        </form>
+      <section class="panel" aria-labelledby="team-schema-note">
+        <h2 id="team-schema-note">Consulta de equipes</h2>
+        <p class="meta">Nesta versão, você pode consultar equipes ativas e visualizar seus integrantes. A criação e o gerenciamento serão habilitados após a implementação e validação das regras de equipe no banco de dados.</p>
       </section>
 
       <section class="team-list-section" aria-labelledby="team-list-heading">
