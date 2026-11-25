@@ -1546,3 +1546,33 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
   assert.equal(login.status, 403);
   assert.doesNotMatch(login.json.mensagem, /políticas de acesso/i);
 });
+
+test('exclusão de conta remove somente a conta autenticada e encerra sua sessão', async (t) => {
+  const amb = await criarAmbiente();
+  t.after(amb.encerrar);
+
+  const dono = await amb.novoJogador('Conta Para Excluir', 'excluir@teste.com');
+  const outro = await amb.novoJogador('Outra Conta', 'outra@teste.com');
+
+  const resposta = await amb.chamar('DELETE', '/api/conta', { cookie: dono.cookie });
+  assert.equal(resposta.status, 200, resposta.texto);
+  assert.match(resposta.json.mensagem, /excluída com sucesso/i);
+  assert.ok(resposta.setCookie.some((valor) => /ra_session=;/i.test(valor)));
+  assert.equal(amb.supabase.usuarios.has(dono.id), false);
+  assert.equal(amb.supabase.usuarios.has(outro.id), true);
+
+  const sessaoRemovida = await amb.chamar('GET', '/api/perfil', { cookie: dono.cookie });
+  assert.equal(sessaoRemovida.status, 401);
+  const sessaoPreservada = await amb.chamar('GET', '/api/perfil', { cookie: outro.cookie });
+  assert.equal(sessaoPreservada.status, 200);
+});
+
+test('exclusão de conta não está disponível sem a RPC homologada no banco', async (t) => {
+  const amb = await criarAmbiente();
+  t.after(amb.encerrar);
+  const jogador = await amb.novoJogador('Conta Sem RPC', 'semrpc@teste.com');
+  const resposta = await amb.chamar('DELETE', '/api/conta', { cookie: jogador.cookie });
+  assert.equal(resposta.status, 503);
+  assert.match(resposta.json.mensagem, /migração.*aplicada/i);
+  assert.equal(amb.supabase.usuarios.has(jogador.id), true);
+});
