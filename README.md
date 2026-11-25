@@ -15,8 +15,9 @@ O objetivo do Rivals Arena é oferecer um ambiente digital para organizar e acom
 - **Partidas e histórico:** consulta de partidas e resultados já registrados; fluxos avançados de agenda, confirmação e contestação dependem de homologação da migração correspondente.
 - **Desafios:** recursos para organizar desafios entre jogadores.
 - **Ranking:** consulta da classificação com base nos pontos, vitórias e derrotas registrados.
-- **Perfil:** visualização de informações do jogador.
-- **Times:** interface e rotas para equipes e integrantes; a integração completa depende da confirmação do schema e das permissões reais do banco.
+- **Perfil:** visualização de informações do jogador, edição do nome e opção de solicitar exclusão definitiva da conta.
+- **Como Usar:** guia de navegação com instruções para cadastro, Central, 1V1, ranking, Times e Perfil.
+- **Times:** interface com busca, atualização da listagem, criação de equipes, detalhes, solicitações e gerenciamento conforme o papel do usuário; a integração completa depende da confirmação do schema e das permissões reais do banco.
 
 > **Estado de integração:** algumas funcionalidades avançadas ainda dependem de revisão e homologação de schema, triggers, policies RLS, grants e migrações no Supabase. Os testes automatizados utilizam simulações e não substituem testes de integração no banco real.
 
@@ -125,18 +126,25 @@ As contagens de inscrições/resumo seguem exatamente o que as policies RLS deix
 | `/` ou `/index.html` | Central (usuário autenticado) |
 | `/pages/campeonatos.html` | Campeonatos, desafios, agenda/resultado preparado e histórico |
 | `/pages/ranking.html`, `/pages/perfil.html` | Ranking e perfil |
+| `/pages/como-usar.html` | Guia de utilização da plataforma |
 | `/pages/arsenal.html` | Catálogo dinâmico; vazio até publicar itens reais no banco |
 | `/pages/times.html` | Interface existente; integração bloqueada até confirmar schema real e preparar migração incremental |
 
 Endpoints públicos: `GET /api/status`, `POST /api/usuarios`, `POST /api/login`, `POST /api/logout`.
 
-Endpoints autenticados incluem perfil, ranking, resumo, histórico, campeonatos, inscrições, desafios, Times (`/api/times`) e Arsenal (`/api/arsenal`). O histórico `GET /api/partidas` permanece compatível. `/api/partidas/agenda`, envio/confirmação/contestação de resultados e agendamento dependem da migração de partidas ainda não aplicada.
+Endpoints autenticados incluem perfil, ranking, resumo, histórico, campeonatos, inscrições, desafios, Times (`/api/times`), Arsenal (`/api/arsenal`) e exclusão da própria conta (`DELETE /api/conta`). O histórico `GET /api/partidas` permanece compatível. `/api/partidas/agenda`, envio/confirmação/contestação de resultados e agendamento dependem da migração de partidas ainda não aplicada.
 
 Os endpoints de torneios continuam com esse nome por compatibilidade com o frontend; os dados são lidos de `campeonatos`. A criação define `status` como `aberto` e deriva `criador_id` do usuário autenticado para atender à policy RLS, sem aceitar esse identificador do navegador.
 
 `POST /api/torneios` recebe `nome`, `descricao`, `modalidade`, `formato`, `max_participantes`, `premio`, `inicio_em` e `encerramento_em`. A modalidade aceita `1v1`, `dupla`, `equipes` ou `solo`; o formato aceita `eliminacao_simples`, `grupos` ou `pontos`. As datas são timestamps ISO 8601 com fuso horário e podem ser omitidas.
 
 O histórico de inscrições consulta `inscricoes` usando o ID do usuário autenticado e inclui os status `pendente`, `aprovada` e `cancelada`, mantendo os IDs de inscrição e campeonato.
+
+### Exclusão de conta
+
+O Perfil oferece uma confirmação em duas etapas e chama `DELETE /api/conta`. O backend solicita a RPC `public.excluir_minha_conta()`, que usa `auth.uid()` para limitar a operação à conta autenticada e remove a sessão somente após sucesso. A proposta SQL está em [20261125_proposta_exclusao_conta.sql](./database/migrations/20261125_proposta_exclusao_conta.sql). **A migração não foi executada.** Antes de aplicá-la, confirme as chaves estrangeiras e regras de retenção no Supabase; o preflight interrompe a execução se as relações necessárias não estiverem em cascata. Até a migração ser revisada e aplicada, a API responde com indisponibilidade controlada e não informa exclusão concluída.
+
+A página de Times ganhou busca local, botão de atualização e apresentação responsiva. As rotas atuais continuam dependentes do contrato de banco ainda não homologado. A migração de Times existente é uma proposta de criação do zero e aborta quando encontra `times` ou `membros_time`; **não a execute no banco atual**. É necessário inspecionar as colunas, constraints, FKs, RPCs e policies existentes e preparar uma migração incremental compatível.
 
 ## Testes
 
