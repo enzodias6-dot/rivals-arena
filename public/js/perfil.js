@@ -11,6 +11,8 @@
   const botaoCancelarNome = $('#cancel-profile-name');
   const botaoSalvarNome = $('#save-profile-name');
   const feedbackNome = $('#profile-name-feedback');
+  const botaoExcluirConta = $('#delete-account-button');
+  const feedbackExclusao = $('#delete-account-feedback');
   const estatisticas = $('#profile-stats');
   let usuarioAtual = null;
   let nomeExibido = null;
@@ -61,6 +63,28 @@
       botaoSalvarNome.disabled = false;
       botaoCancelarNome.disabled = false;
       campoNome.disabled = false;
+    }
+  });
+
+  botaoExcluirConta.addEventListener('click', async () => {
+    const confirmado = window.confirm(
+      'Tem certeza de que deseja excluir sua conta? Seu nome e email serão anonimizados e esta ação não poderá ser desfeita. O histórico de partidas será preservado.'
+    );
+    if (!confirmado) return;
+
+    botaoExcluirConta.disabled = true;
+    feedbackExclusao.hidden = false;
+    feedbackExclusao.textContent = 'Processando exclusão da conta...';
+
+    try {
+      const resultado = await api('conta', { metodo: 'DELETE' });
+      limparSessaoLocal();
+      window.alert(resultado.mensagem || 'Conta excluída.');
+      window.location.assign(raiz + 'acesso.html');
+    } catch (erro) {
+      feedbackExclusao.textContent = erro.message || 'Não foi possível excluir a conta.';
+      feedbackExclusao.setAttribute('role', 'alert');
+      botaoExcluirConta.disabled = false;
     }
   });
 
