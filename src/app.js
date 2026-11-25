@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
 
-const { criarClienteSupabase } = require('./config/supabase');
+const { criarClienteSupabase, criarClienteSupabaseAdmin } = require('./config/supabase');
 const { criarAuth } = require('./middlewares/auth');
 const { cabecalhosSeguranca } = require('./middlewares/seguranca');
 const { criarRotasApi } = require('./routes');
@@ -19,7 +19,13 @@ const FONTES_TITULOS = [
 /**
  * Recebe a fábrica do cliente para que a aplicação possa ser testada sem Supabase.
  */
-function criarApp({ config, criarCliente = (accessToken) => criarClienteSupabase(config, accessToken) }) {
+function criarApp({
+  config,
+  criarCliente = (accessToken) => criarClienteSupabase(config, accessToken),
+  criarClienteAdmin = config.supabaseServiceRoleKey
+    ? () => criarClienteSupabaseAdmin(config)
+    : null
+}) {
   const app = express();
   const auth = criarAuth(config, criarCliente);
   const pasta = config.pastaPublica;
@@ -33,7 +39,7 @@ function criarApp({ config, criarCliente = (accessToken) => criarClienteSupabase
   app.use(express.json({ limit: '20kb' }));
 
   // ---- API ----
-  app.use('/api', criarRotasApi({ config, auth, criarCliente }));
+  app.use('/api', criarRotasApi({ config, auth, criarCliente, criarClienteAdmin }));
 
   // ---- Arquivos públicos (necessários para a tela de acesso) ----
   // A fonte Phoenix Gaming é opcional: o CSS dela só é gerado se o arquivo existir em public/fonts.

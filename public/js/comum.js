@@ -98,6 +98,7 @@
     ['index.html', 'Central'],
     ['pages/campeonatos.html', '1V1'],
     ['pages/ranking.html', 'Ranking'],
+    ['pages/como-usar.html', 'Como Usar'],
     ['pages/times.html', 'Times'],
     ['pages/perfil.html', 'Perfil'],
     ['#sair', 'Sair']
@@ -125,7 +126,8 @@
     const links = itensMenu.map(([destino, rotulo]) => {
       if (destino === '#sair') return `<a href="#" id="logout">${rotulo}</a>`;
       const ativo = itemAtivo(destino);
-      return `<a${ativo ? ' class="active" aria-current="page"' : ''} href="${raiz}${destino}">${rotulo}</a>`;
+      const destinoRelativo = raiz && destino.startsWith('pages/') ? destino.slice(6) : destino;
+      return `<a${ativo ? ' class="active" aria-current="page"' : ''} href="${raiz}${destinoRelativo}">${rotulo}</a>`;
     }).join('');
 
     cabecalho.innerHTML = `${logo(`${raiz}index.html`)}<button class="menu-toggle" type="button" aria-label="Abrir menu" aria-expanded="false" aria-controls="menu-principal">☰</button><nav id="menu-principal" aria-label="Menu principal">${links}</nav>`;
@@ -152,6 +154,27 @@
       evento.preventDefault();
       sair();
     });
+  }
+
+  // ---- Redes sociais no rodapé (exceto na página de Perfil) ----
+  function montarRedesSociais() {
+    if (pagina === 'perfil') return;
+    const rodape = $('footer');
+    if (!rodape || $('.social-links', rodape)) return;
+
+    rodape.classList.add('site-footer');
+    const redes = criarElemento('div', 'social-links');
+    redes.setAttribute('aria-label', 'Redes sociais oficiais');
+    redes.innerHTML = `
+      <a class="social-link social-instagram" href="https://www.instagram.com/rivalsarenagg/" target="_blank" rel="noopener noreferrer" aria-label="Instagram do Rivals Arena">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor"/></svg>
+        <span>Instagram</span>
+      </a>
+      <a class="social-link social-youtube" href="https://youtube.com/@rivalsarenagg" target="_blank" rel="noopener noreferrer" aria-label="YouTube do Rivals Arena">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.6V8.4l6.2 3.6-6.2 3.6Z"/></svg>
+        <span>YouTube</span>
+      </a>`;
+    rodape.append(redes);
   }
 
   // ---- Avisos (toast) ----
@@ -204,6 +227,7 @@
   }
 
   montarCabecalho();
+  montarRedesSociais();
   montarLinkDePulo();
   ativarAnimacaoDeEntrada();
 

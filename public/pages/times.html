@@ -4,11 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#080a0f">
-  <meta name="description" content="Gerencie times, integrantes e solicitações na Rivals Arena.">
+  <meta name="description" content="Consulte equipes ativas e conheça seus integrantes na Rivals Arena.">
   <title>Times | Rivals Arena</title>
   <link rel="icon" type="image/png" href="../img/logo.png">
   <link rel="stylesheet" href="../css/fonte-titulos.css">
   <link rel="stylesheet" href="../css/styles.css">
+  <link rel="stylesheet" href="../css/times.css">
 </head>
 <body data-page="times">
   <header id="hdr" class="site-header"></header>
@@ -18,29 +19,26 @@
     </section>
 
     <section class="section page-content">
-      <p class="meta" role="note">A capacidade padrão de até cinco integrantes é uma proposta sujeita à aprovação da equipe do projeto.</p>
-      <p id="team-status" role="status" aria-live="polite"></p>
+      <p class="meta" role="note">Consulte equipes ativas, pesquise pelo nome ou descrição e visualize seus integrantes.</p>
+      <p id="team-status" class="team-status" role="status" aria-live="polite"></p>
 
-      <section class="panel" aria-labelledby="team-create-heading">
-        <h2 id="team-create-heading">Criar time</h2>
-        <form id="team-create-form">
-          <label for="team-name">Nome</label>
-          <input id="team-name" name="nome" maxlength="80" required>
-          <label for="team-description">Descrição</label>
-          <textarea id="team-description" name="descricao" maxlength="1000" rows="3"></textarea>
-          <label for="team-capacity">Limite proposto de integrantes</label>
-          <select id="team-capacity" name="max_integrantes">
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5" selected>5</option>
-          </select>
-          <button class="button-primary" type="submit">Criar time</button>
-        </form>
+      <section class="panel" aria-labelledby="team-schema-note">
+        <h2 id="team-schema-note">Consulta de equipes</h2>
+        <p class="meta">Nesta versão, você pode consultar equipes ativas e visualizar seus integrantes. A criação e o gerenciamento serão habilitados após a implementação e validação das regras de equipe no banco de dados.</p>
       </section>
 
-      <section aria-labelledby="team-list-heading">
-        <h2 id="team-list-heading">Times cadastrados</h2>
+      <section class="team-list-section" aria-labelledby="team-list-heading">
+        <div class="team-list-heading">
+          <div>
+            <h2 id="team-list-heading">Times cadastrados</h2>
+            <p class="meta">Pesquise pelo nome ou pela descrição de uma equipe.</p>
+          </div>
+          <div class="team-list-actions">
+            <label class="visually-hidden" for="team-search">Buscar time</label>
+            <input id="team-search" type="search" placeholder="Buscar time..." autocomplete="off">
+            <button class="button-secondary compact" type="button" id="refresh-teams">Atualizar</button>
+          </div>
+        </div>
         <div id="team-list" class="card-grid" aria-live="polite"></div>
       </section>
       <section id="team-detail" class="section" aria-live="polite" hidden></section>

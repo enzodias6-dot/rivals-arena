@@ -26,6 +26,8 @@ function carregarConfig(env = process.env) {
     confiarProxy: lerProxy(env.TRUST_PROXY),
     supabaseUrl: env.SUPABASE_URL || '',
     supabaseAnonKey: env.SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY || '',
+    // Segredo exclusivo do servidor; nunca deve ser usado no navegador.
+    supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY || '',
     banco: {
       host: env.DB_HOST || '127.0.0.1',
       port: lerInteiroPositivo(env.DB_PORT, 3306),

@@ -1,0 +1,66 @@
+.guide-content {
+  display: grid;
+  gap: 24px;
+}
+.guide-intro,
+.guide-help {
+  padding: clamp(20px, 3vw, 30px);
+}
+.guide-intro h2,
+.guide-help h2 {
+  margin-top: 0;
+}
+.guide-intro p,
+.guide-help p {
+  color: var(--muted);
+  max-width: 850px;
+}
+.guide-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.guide-step {
+  position: relative;
+  padding: 24px;
+  min-height: 220px;
+  overflow: hidden;
+}
+.guide-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(255, 48, 79, .35);
+  border-radius: 10px;
+  background: rgba(255, 48, 79, .1);
+  color: var(--red-soft);
+  font-weight: 800;
+}
+.guide-step h2 {
+  margin: 0 0 10px;
+  font-size: 20px;
+}
+.guide-step p {
+  margin: 0;
+  color: var(--muted);
+}
+.guide-step .meta {
+  margin-top: 12px;
+  font-size: 12px;
+}
+.guide-help .button-secondary {
+  display: inline-flex;
+  margin-top: 8px;
+  text-decoration: none;
+}
+@media (max-width: 680px) {
+  .guide-grid {
+    grid-template-columns: 1fr;
+  }
+  .guide-step {
+    min-height: 0;
+  }
+}

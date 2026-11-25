@@ -11,9 +11,10 @@ const { criarRotasDesafios } = require('./desafios');
 const { criarRotasTimes } = require('./times');
 const { criarRotasArsenal } = require('./arsenal');
 const { criarRotasPartidas } = require('./partidas');
+const { criarRotasConta } = require('./conta');
 
 function criarRotasApi(contexto) {
-  const { config, auth, criarCliente } = contexto;
+  const { config, auth, criarCliente, criarClienteAdmin } = contexto;
   const router = express.Router();
 
   router.use(verificarOrigem);
@@ -26,6 +27,7 @@ function criarRotasApi(contexto) {
   router.use(criarRotasAutenticacao(contexto));
 
   router.use(auth.autenticar);
+  router.use(criarRotasConta({ auth, criarClienteAdmin }));
   router.use(criarRotasJogadores());
   router.use(criarRotasTorneios(contexto));
   router.use(criarRotasDesafios(contexto));
