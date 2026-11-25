@@ -23,7 +23,8 @@ confirmacaoEmailObrigatoria = false,
 producao = false,
 limites,
 limiteMaximoLinhas,
-pastaPublica
+pastaPublica,
+adminAtivo = false
 } = {}) {
 const supabase = criarSupabaseFake({ confirmacaoEmailObrigatoria, limiteMaximoLinhas });
   const config = {
@@ -40,7 +41,7 @@ const supabase = criarSupabaseFake({ confirmacaoEmailObrigatoria, limiteMaximoLi
       ...limites
     }
   };
-  const app = criarApp({ config, criarCliente: supabase.criarCliente });
+  const app = criarApp({ config, criarCliente: supabase.criarCliente, criarClienteAdmin: adminAtivo ? supabase.criarClienteAdmin : null });
   const servidor = await new Promise((resolver) => {
     const instancia = app.listen(0, '127.0.0.1', () => resolver(instancia));
   });
@@ -1446,4 +1447,30 @@ test('exclusão de conta permanece indisponível sem chave administrativa e pres
   assert.equal(amb.supabase.usuarios.has(jogador.id), true);
   const perfil = await amb.chamar('GET', '/api/perfil', { cookie: jogador.cookie });
   assert.equal(perfil.status, 200);
+});
+
+test('exclusão com cliente administrativo anonimiza o perfil, remove Auth e encerra a sessão', async (t) => {
+  const amb = await criarAmbiente({ adminAtivo: true });
+  t.after(amb.encerrar);
+  const jogador = await amb.novoJogador('Conta Para Excluir', 'excluir@teste.com');
+  const timeId = amb.supabase.seed('times', {
+    nome: 'Time Histórico', descricao: 'Preservar registro', responsavel_id: jogador.id,
+    status: 'ativo', publico: true
+  }).id;
+  const partidaId = amb.supabase.seed('partidas', {
+    jogador_1_id: jogador.id, jogador_2_id: '00000000-0000-4000-8000-000000000001',
+    vencedor_id: jogador.id, resultado: '2-1', status: 'concluida'
+  }).id;
+
+  const resposta = await amb.chamar('DELETE', '/api/conta', { cookie: jogador.cookie });
+  assert.equal(resposta.status, 200, resposta.texto);
+  assert.match(resposta.json.mensagem, /anonimizados/i);
+  const perfil = amb.supabase.tabelas.usuarios.find((item) => item.id === jogador.id);
+  assert.equal(perfil.nome, 'Conta excluída');
+  assert.equal(perfil.email, `conta-excluida+${jogador.id}@anon.invalid`);
+  assert.equal(amb.supabase.usuarios.has(jogador.id), false);
+  assert.ok(amb.supabase.tabelas.times.some((item) => item.id === timeId && item.responsavel_id === jogador.id));
+  assert.ok(amb.supabase.tabelas.partidas.some((item) => item.id === partidaId && item.jogador_1_id === jogador.id));
+  assert.ok(resposta.setCookie.some((valor) => valor.startsWith('ra_session=;')));
+  assert.equal((await amb.chamar('GET', '/api/perfil', { cookie: jogador.cookie })).status, 401);
 });
