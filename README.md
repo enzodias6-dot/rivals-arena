@@ -15,7 +15,7 @@ O objetivo do Rivals Arena é oferecer um ambiente digital para organizar e acom
 - **Partidas e histórico:** consulta de partidas e resultados já registrados; fluxos avançados de agenda, confirmação e contestação dependem de homologação da migração correspondente.
 - **Desafios:** recursos para organizar desafios entre jogadores.
 - **Ranking:** consulta da classificação com base nos pontos, vitórias e derrotas registrados.
-- **Perfil:** visualização de informações do jogador, edição do nome e opção de solicitar exclusão definitiva da conta.
+- **Perfil:** visualização de informações do jogador e edição do nome. A exclusão de conta está temporariamente indisponível até a aprovação de uma política segura de retenção e anonimização.
 - **Como Usar:** guia de navegação com instruções para cadastro, Central, 1V1, ranking, Times e Perfil.
 - **Times:** interface com busca, atualização da listagem, criação de equipes, detalhes, solicitações e gerenciamento conforme o papel do usuário; a integração completa depende da confirmação do schema e das permissões reais do banco.
 
@@ -132,7 +132,7 @@ As contagens de inscrições/resumo seguem exatamente o que as policies RLS deix
 
 Endpoints públicos: `GET /api/status`, `POST /api/usuarios`, `POST /api/login`, `POST /api/logout`.
 
-Endpoints autenticados incluem perfil, ranking, resumo, histórico, campeonatos, inscrições, desafios, Times (`/api/times`), Arsenal (`/api/arsenal`) e exclusão da própria conta (`DELETE /api/conta`). O histórico `GET /api/partidas` permanece compatível. `/api/partidas/agenda`, envio/confirmação/contestação de resultados e agendamento dependem da migração de partidas ainda não aplicada.
+Endpoints autenticados incluem perfil, ranking, resumo, histórico, campeonatos, inscrições, desafios, Times (`/api/times`), Arsenal (`/api/arsenal`) e solicitação de exclusão de conta (`DELETE /api/conta`, atualmente bloqueada com HTTP 503). O histórico `GET /api/partidas` permanece compatível. `/api/partidas/agenda`, envio/confirmação/contestação de resultados e agendamento dependem da migração de partidas ainda não aplicada.
 
 Os endpoints de torneios continuam com esse nome por compatibilidade com o frontend; os dados são lidos de `campeonatos`. A criação define `status` como `aberto` e deriva `criador_id` do usuário autenticado para atender à policy RLS, sem aceitar esse identificador do navegador.
 
@@ -142,7 +142,7 @@ O histórico de inscrições consulta `inscricoes` usando o ID do usuário auten
 
 ### Exclusão de conta
 
-O Perfil oferece uma confirmação em duas etapas e chama `DELETE /api/conta`. O backend solicita a RPC `public.excluir_minha_conta()`, que usa `auth.uid()` para limitar a operação à conta autenticada e remove a sessão somente após sucesso. A proposta SQL está em [20261125_proposta_exclusao_conta.sql](./database/migrations/20261125_proposta_exclusao_conta.sql). **A migração não foi executada.** Antes de aplicá-la, confirme as chaves estrangeiras e regras de retenção no Supabase; o preflight interrompe a execução se as relações necessárias não estiverem em cascata. Até a migração ser revisada e aplicada, a API responde com indisponibilidade controlada e não informa exclusão concluída.
+A exclusão de conta está bloqueada no Perfil e a API `DELETE /api/conta` retorna HTTP 503 sem chamar RPC, encerrar a sessão ou alterar dados. O inventário real mostrou relações `RESTRICT` e `CASCADE` que tornam a exclusão física em cascata inadequada para preservar partidas, campeonatos e inscrições. O arquivo [20261125_proposta_exclusao_conta.sql](./database/migrations/20261125_proposta_exclusao_conta.sql) contém apenas diagnóstico de leitura. Antes de reativar essa função, é necessário aprovar uma política de retenção, anonimização dos dados pessoais e tratamento de contas responsáveis por times/campeonatos.
 
 A página de Times ganhou busca local, botão de atualização e apresentação responsiva. As rotas atuais continuam dependentes do contrato de banco ainda não homologado. A migração de Times existente é uma proposta de criação do zero e aborta quando encontra `times` ou `membros_time`; **não a execute no banco atual**. É necessário inspecionar as colunas, constraints, FKs, RPCs e policies existentes e preparar uma migração incremental compatível.
 
