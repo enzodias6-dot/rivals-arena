@@ -110,6 +110,7 @@ function criarRotasTimes() {
     if (error) {
       const mensagens = {
         already_team_member: [409, 'Você já faz parte desta equipe.'],
+        already_member: [409, 'Você já faz parte desta equipe.'],
         team_not_available: [409, 'Esta equipe não está disponível para receber solicitações.'],
         request_already_pending: [409, 'Você já tem uma solicitação pendente para esta equipe.'],
         authentication_required: [401, 'Entre novamente para solicitar entrada.']
@@ -180,6 +181,7 @@ function criarRotasTimes() {
     if (error) {
       const mensagens = {
         only_active_team_owner_can_decide: [403, 'Somente o responsável da equipe pode responder.'],
+        only_team_owner_can_decide: [403, 'Somente o responsável da equipe pode responder.'],
         request_not_found: [404, 'Solicitação não encontrada.'],
         request_already_decided: [409, 'Esta solicitação já foi respondida.'],
         already_member: [409, 'Este jogador já faz parte da equipe.'],
