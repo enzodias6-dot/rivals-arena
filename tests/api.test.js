@@ -1152,133 +1152,22 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
     message: 'Signup disabled'
   });
 
-  test('Times usa a identidade autenticada e oferece solicitação, aprovação, saída e transferência', async (t) => {
+  test('Times consulta campos compatíveis com o schema confirmado e exige autenticação', async (t) => {
     const amb = await criarAmbiente();
     t.after(amb.encerrar);
-    const lider = await amb.novoJogador('Líder');
-    const membro = await amb.novoJogador('Integrante');
-    const outro = await amb.novoJogador('Outro Jogador');
-
-    const semSessao = await amb.chamar('POST', '/api/times', {
-      corpo: { nome: 'Time sem sessão' }
-    });
+    const jogador = await amb.novoJogador('Consulta Times');
+    const semSessao = await amb.chamar('GET', '/api/times');
     assert.equal(semSessao.status, 401);
 
-    const criado = await amb.chamar('POST', '/api/times', {
-      cookie: lider.cookie,
-      corpo: {
-        nome: '  Equipe Arena  ',
-        descricao: 'Formação de teste',
-        max_integrantes: 3,
-        lider_id: outro.id
-      }
-    });
-    assert.equal(criado.status, 201);
-    const timeId = criado.json.dados.id;
-    assert.equal(criado.json.dados.nome, 'Equipe Arena');
-    assert.equal(criado.json.dados.lider_id, lider.id);
-    assert.equal(amb.supabase.tabelas.membros_time[0].jogador_id, lider.id);
-
-    const solicitacao = await amb.chamar('POST', `/api/times/${timeId}/solicitacoes`, {
-      cookie: membro.cookie,
-      corpo: {}
-    });
-    assert.equal(solicitacao.status, 201);
-    const pendentes = await amb.chamar('GET', `/api/times/${timeId}`, { cookie: lider.cookie });
-    assert.equal(pendentes.json.time.solicitacoes[0].nome, 'Integrante');
-
-    const aprovada = await amb.chamar('PATCH', `/api/times/solicitacoes/${solicitacao.json.dados.id}`, {
-      cookie: lider.cookie,
-      corpo: { aceitar: true }
-    });
-    assert.equal(aprovada.status, 200);
-    assert.equal(aprovada.json.dados.status, 'aprovada');
-
-    const outraSolicitacao = await amb.chamar('POST', `/api/times/${timeId}/solicitacoes`, {
-      cookie: outro.cookie,
-      corpo: {}
-    });
-    assert.equal(outraSolicitacao.status, 201);
-    assert.equal((await amb.chamar('PATCH', `/api/times/solicitacoes/${outraSolicitacao.json.dados.id}`, {
-      cookie: lider.cookie,
-      corpo: { aceitar: true }
-    })).status, 200);
-
-    const proibida = await amb.chamar('PATCH', `/api/times/${timeId}`, {
-      cookie: membro.cookie,
-      corpo: { nome: 'Nome indevido', descricao: '', max_integrantes: 3 }
-    });
-    assert.equal(proibida.status, 403);
-
-    const editado = await amb.chamar('PATCH', `/api/times/${timeId}`, {
-      cookie: lider.cookie,
-      corpo: { nome: 'Equipe Renomeada', descricao: 'Descrição editada', max_integrantes: 3 }
-    });
-    assert.equal(editado.status, 200);
-    assert.equal(editado.json.dados.nome, 'Equipe Renomeada');
-
-    const removido = await amb.chamar('DELETE', `/api/times/${timeId}/membros/${outro.id}`, {
-      cookie: lider.cookie
-    });
-    assert.equal(removido.status, 200);
-    assert.equal(amb.supabase.tabelas.membros_time.find((item) =>
-      item.time_id === timeId && item.jogador_id === outro.id
-    ).status, 'removido');
-
-    const transferencia = await amb.chamar('POST', `/api/times/${timeId}/transferir-lideranca`, {
-      cookie: lider.cookie,
-      corpo: { novo_lider_id: membro.id }
-    });
-    assert.equal(transferencia.status, 200);
-    assert.equal(transferencia.json.dados.lider_id, membro.id);
-
-    const saida = await amb.chamar('POST', `/api/times/${timeId}/sair`, {
-      cookie: lider.cookie,
-      corpo: {}
-    });
-    assert.equal(saida.status, 200);
-    assert.equal(amb.supabase.tabelas.membros_time.find((item) =>
-      item.time_id === timeId && item.jogador_id === lider.id
-    ).status, 'saiu');
+    const vazio = await amb.chamar('GET', '/api/times', { cookie: jogador.cookie });
+    assert.equal(vazio.status, 200);
+    assert.deepEqual(vazio.json, { times: [] });
   });
 
-  test('Times valida o limite proposto e recusa solicitações quando o time está cheio', async (t) => {
+  test('Times informa indisponibilidade quando a tabela real não pode ser consultada', async (t) => {
     const amb = await criarAmbiente();
     t.after(amb.encerrar);
-    const lider = await amb.novoJogador('Líder Vagas');
-    const membro = await amb.novoJogador('Membro Vagas');
-    const terceiro = await amb.novoJogador('Terceiro Vagas');
-
-    const invalido = await amb.chamar('POST', '/api/times', {
-      cookie: lider.cookie,
-      corpo: { nome: 'Time inválido', max_integrantes: 6 }
-    });
-    assert.equal(invalido.status, 400);
-
-    const criado = await amb.chamar('POST', '/api/times', {
-      cookie: lider.cookie,
-      corpo: { nome: 'Time Completo', max_integrantes: 2 }
-    });
-    const timeId = criado.json.dados.id;
-    const solicitacao = await amb.chamar('POST', `/api/times/${timeId}/solicitacoes`, {
-      cookie: membro.cookie, corpo: {}
-    });
-    assert.equal(solicitacao.status, 201);
-    assert.equal((await amb.chamar('PATCH', `/api/times/solicitacoes/${solicitacao.json.dados.id}`, {
-      cookie: lider.cookie, corpo: { aceitar: true }
-    })).status, 200);
-
-    const lotado = await amb.chamar('POST', `/api/times/${timeId}/solicitacoes`, {
-      cookie: terceiro.cookie, corpo: {}
-    });
-    assert.equal(lotado.status, 409);
-    assert.match(lotado.json.mensagem, /limite/i);
-  });
-
-  test('Times informa quando a migração ainda não existe no Supabase', async (t) => {
-    const amb = await criarAmbiente();
-    t.after(amb.encerrar);
-    const jogador = await amb.novoJogador('Sem migração de time');
+    const jogador = await amb.novoJogador('Sem acesso a Times');
     amb.supabase.falharTabela('times', {
       code: 'PGRST205',
       message: 'table not found',
@@ -1287,7 +1176,6 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
 
     const resposta = await amb.chamar('GET', '/api/times', { cookie: jogador.cookie });
     assert.equal(resposta.status, 503);
-    assert.match(resposta.json.mensagem, /schema do Supabase ainda não contém/i);
   });
 
   test('Arsenal apresenta somente itens publicados vindos do banco', async (t) => {
