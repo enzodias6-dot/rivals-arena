@@ -146,6 +146,10 @@ A exclusão de conta está bloqueada no Perfil e a API `DELETE /api/conta` retor
 
 A página de Times oferece busca, atualização e consulta de integrantes. As rotas usam os campos confirmados `times.responsavel_id` e `membros_time.usuario_id`. Criação, solicitações, edição, saída e transferência de liderança continuam indisponíveis: o banco não possui a tabela de solicitações nem as RPCs necessárias. A migração de Times existente é uma proposta de criação do zero e aborta quando encontra `times` ou `membros_time`; **não a execute no banco atual**. A próxima etapa é desenhar e homologar uma migração incremental, com policies e RPCs específicas.
 
+## Diagnóstico de Times no Supabase
+
+O arquivo [20261126_times_schema_readonly.sql](./database/diagnostics/20261126_times_schema_readonly.sql) coleta colunas, constraints, índices, policies RLS, grants, triggers, funções, valores de status e a definição da view de perfis. Ele usa uma transação `READ ONLY` e termina com `ROLLBACK`; não cria nem altera objetos ou dados. Execute-o no SQL Editor apenas para diagnóstico antes de habilitar criação de equipes, solicitações, aprovação, saída ou transferência de liderança.
+
 ## Testes
 
 ```bash
