@@ -17,7 +17,7 @@ O objetivo do Rivals Arena é oferecer um ambiente digital para organizar e acom
 - **Ranking:** consulta da classificação com base nos pontos, vitórias e derrotas registrados.
 - **Perfil:** visualização de informações do jogador e edição do nome. A exclusão de conta está temporariamente indisponível até a aprovação de uma política segura de retenção e anonimização.
 - **Como Usar:** guia de navegação com instruções para cadastro, Central, 1V1, ranking, Times e Perfil.
-- **Times:** interface com busca, atualização da listagem, criação de equipes, detalhes, solicitações e gerenciamento conforme o papel do usuário; a integração completa depende da confirmação do schema e das permissões reais do banco.
+- **Times:** consulta de equipes ativas, busca por nome/descrição e visualização dos integrantes. Criação, solicitações e gerenciamento estão temporariamente indisponíveis porque o schema atual não possui as estruturas/RPCs necessárias.
 
 > **Estado de integração:** algumas funcionalidades avançadas ainda dependem de revisão e homologação de schema, triggers, policies RLS, grants e migrações no Supabase. Os testes automatizados utilizam simulações e não substituem testes de integração no banco real.
 
@@ -104,7 +104,7 @@ O inventário fornecido pela equipe confirma as tabelas `usuarios`, `campeonatos
 
 O inventário confirma `partidas.resultado` como `VARCHAR` com constraint de placar numérico, por exemplo `2-1`. O histórico `GET /api/partidas` usa esse campo como fonte do resultado final. O fluxo novo foi alinhado para receber placar textual e só gravar o resultado canônico em `partidas.resultado` após confirmação; relatos pendentes e eventos dependem da migração `database/migrations/20261120_proposta_partidas_resultados_ivi.sql`, ainda não executada. O inventário não confirma as demais colunas/constraints necessárias, então agenda, relato, confirmação e contestação seguem bloqueados para integração real. A proposta não altera `pontos` nem ativa IVI.
 
-O inventário confirma `times` e `membros_time`, mas não informa seus campos, constraints, RPCs nem policies, e não encontrou `solicitacoes_time`. A migração atual de Times é de criação do zero e interrompe se encontrar as duas tabelas existentes; não deve ser aplicada. A página e as rotas dependem de um contrato ainda não confirmado. Capacidade de até cinco integrantes e regra de múltiplos times continuam propostas, não regras oficiais.
+O inventário confirma `times` com `responsavel_id`, `status` e `publico`, e `membros_time` com `usuario_id`, `funcao` e `status`. Não foi encontrada a tabela `solicitacoes_time` nem RPCs de Times. As rotas foram limitadas à consulta de equipes ativas e integrantes usando esses campos confirmados. Criação, solicitações, edição, saída e transferência de liderança permanecem desabilitadas até existir desenho incremental e permissões homologadas. A migração atual de Times é de criação do zero e interrompe se encontrar as tabelas existentes; não deve ser aplicada.
 
 O Arsenal consulta `arsenal_itens` publicados por API e oferece busca, categoria e detalhes. A tabela não existe no inventário fornecido. `database/migrations/20261120_proposta_arsenal.sql` propõe uma tabela nova com RLS e leitura de itens publicados por usuários autenticados; a migração não foi executada e não inclui itens fictícios. A página informa quando o catálogo está vazio.
 
@@ -128,7 +128,7 @@ As contagens de inscrições/resumo seguem exatamente o que as policies RLS deix
 | `/pages/ranking.html`, `/pages/perfil.html` | Ranking e perfil |
 | `/pages/como-usar.html` | Guia de utilização da plataforma |
 | `/pages/arsenal.html` | Catálogo dinâmico; vazio até publicar itens reais no banco |
-| `/pages/times.html` | Interface existente; integração bloqueada até confirmar schema real e preparar migração incremental |
+| `/pages/times.html` | Consulta de equipes ativas, busca e visualização de integrantes |
 
 Endpoints públicos: `GET /api/status`, `POST /api/usuarios`, `POST /api/login`, `POST /api/logout`.
 
@@ -144,7 +144,7 @@ O histórico de inscrições consulta `inscricoes` usando o ID do usuário auten
 
 A exclusão de conta está bloqueada no Perfil e a API `DELETE /api/conta` retorna HTTP 503 sem chamar RPC, encerrar a sessão ou alterar dados. O inventário real mostrou relações `RESTRICT` e `CASCADE` que tornam a exclusão física em cascata inadequada para preservar partidas, campeonatos e inscrições. O arquivo [20261125_proposta_exclusao_conta.sql](./database/migrations/20261125_proposta_exclusao_conta.sql) contém apenas diagnóstico de leitura. Antes de reativar essa função, é necessário aprovar uma política de retenção, anonimização dos dados pessoais e tratamento de contas responsáveis por times/campeonatos.
 
-A página de Times ganhou busca local, botão de atualização e apresentação responsiva. As rotas atuais continuam dependentes do contrato de banco ainda não homologado. A migração de Times existente é uma proposta de criação do zero e aborta quando encontra `times` ou `membros_time`; **não a execute no banco atual**. É necessário inspecionar as colunas, constraints, FKs, RPCs e policies existentes e preparar uma migração incremental compatível.
+A página de Times oferece busca, atualização e consulta de integrantes. As rotas usam os campos confirmados `times.responsavel_id` e `membros_time.usuario_id`. Criação, solicitações, edição, saída e transferência de liderança continuam indisponíveis: o banco não possui a tabela de solicitações nem as RPCs necessárias. A migração de Times existente é uma proposta de criação do zero e aborta quando encontra `times` ou `membros_time`; **não a execute no banco atual**. A próxima etapa é desenhar e homologar uma migração incremental, com policies e RPCs específicas.
 
 ## Testes
 
@@ -154,7 +154,7 @@ npm run test:api    # testes HTTP com cliente Supabase simulado
 npm test            # executa as duas verificações
 ```
 
-Os testes usam um mock em memória e cobrem autenticação, perfil/ranking, Times, Arsenal, inscrições, resultados/idempotência e regressões das rotas atuais; os testes de Elo e estados de resultado são puros. A simulação de RPC não comprova RLS, triggers, locks, constraints ou integração com Supabase real. As migrações SQL são propostas e não foram executadas.
+Os testes usam um mock em memória e cobrem autenticação, perfil/ranking, consulta de Times, Arsenal, inscrições, resultados/idempotência e regressões das rotas atuais; os testes de Elo e estados de resultado são puros. A simulação de RPC não comprova RLS, triggers, locks, constraints ou integração com Supabase real. As migrações SQL são propostas e não foram executadas.
 
 Para testar a interface no navegador sem Supabase, inicie `node tests/helpers/servidor-teste.js 3100` e crie uma conta no próprio ambiente simulado. Os dados são temporários e desaparecem ao parar o processo.
 
