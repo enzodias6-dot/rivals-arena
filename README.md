@@ -82,11 +82,12 @@ npm run dev
 | `SUPABASE_URL` | URL HTTPS do projeto Supabase |
 | `SUPABASE_ANON_KEY` | Chave anon ou publicável do projeto |
 | `SUPABASE_PUBLISHABLE_KEY` | Alternativa à variável anterior para a chave publicável |
+| `SUPABASE_SERVICE_ROLE_KEY` | Segredo opcional, somente no servidor, necessário para exclusão administrativa de conta |
 | `NODE_ENV` | Use `production` na publicação |
 | `PORT` | Porta local (padrão `3000`) |
 | `TRUST_PROXY` | Número de proxies confiáveis; configure como `1` na Vercel para IPs corretos e cabeçalhos HTTPS |
 
-Somente `SUPABASE_URL` e uma das duas variáveis de chave são necessárias para a aplicação; as demais têm padrão. O servidor aceita chaves `sb_publishable_` e chaves JWT legadas com `role=anon`, e rejeita chaves privadas ou com outro papel. Nunca use chaves privadas nem `service_role` no frontend ou nas variáveis desta aplicação. Não versione `.env`.
+Somente `SUPABASE_URL` e uma das duas variáveis de chave pública são necessárias para iniciar a aplicação; `SUPABASE_SERVICE_ROLE_KEY` é opcional e habilita a exclusão administrativa de contas. Cadastre-a somente nas variáveis privadas do backend/Vercel, nunca em `public/`, HTML ou JavaScript. O servidor aceita chaves `sb_publishable_` e chaves JWT legadas com `role=anon`, e rejeita chaves privadas ou com outro papel. Nunca use chaves privadas nem `service_role` no frontend ou nas variáveis desta aplicação. Não versione `.env`.
 
 O arquivo `.env.example` contém apenas valores fictícios. Não use a URL/chave de exemplo para uma conexão real.
 
@@ -142,7 +143,7 @@ O histórico de inscrições consulta `inscricoes` usando o ID do usuário auten
 
 ### Exclusão de conta
 
-A exclusão de conta está bloqueada no Perfil e a API `DELETE /api/conta` retorna HTTP 503 sem chamar RPC, encerrar a sessão ou alterar dados. O inventário real mostrou relações `RESTRICT` e `CASCADE` que tornam a exclusão física em cascata inadequada para preservar partidas, campeonatos e inscrições. O arquivo [20261125_proposta_exclusao_conta.sql](./database/migrations/20261125_proposta_exclusao_conta.sql) contém apenas diagnóstico de leitura. Antes de reativar essa função, é necessário aprovar uma política de retenção, anonimização dos dados pessoais e tratamento de contas responsáveis por times/campeonatos.
+A rota autenticada `DELETE /api/conta` anonimiza nome e email em `public.usuarios`, mantém o UUID do perfil para preservar as FKs de partidas, campeonatos, inscrições e equipes, e então remove a identidade em Supabase Auth usando um cliente administrativo criado exclusivamente no backend. A função não apaga linhas competitivas nem altera policies RLS. Sem `SUPABASE_SERVICE_ROLE_KEY` configurada como segredo privado do servidor, a API permanece indisponível com HTTP 503. A exclusão do Auth é uma etapa administrativa separada da atualização do perfil; em caso de erro retornado pelo Auth, o backend tenta restaurar nome e email anteriores. Antes de habilitar em produção, configure a chave privada apenas no ambiente seguro do servidor e valide o fluxo em um projeto Supabase de teste com contas e histórico fictícios. O arquivo [20261125_proposta_exclusao_conta.sql](./database/migrations/20261125_proposta_exclusao_conta.sql) continua sendo somente diagnóstico; nenhuma migração ou alteração de banco foi executada pelo projeto.
 
 A página de Times oferece busca, atualização e consulta de integrantes. As rotas usam os campos confirmados `times.responsavel_id` e `membros_time.usuario_id`. Criação, solicitações, edição, saída e transferência de liderança continuam indisponíveis: o banco não possui a tabela de solicitações nem as RPCs necessárias. A migração de Times existente é uma proposta de criação do zero e aborta quando encontra `times` ou `membros_time`; **não a execute no banco atual**. A próxima etapa é desenhar e homologar uma migração incremental, com policies e RPCs específicas.
 
