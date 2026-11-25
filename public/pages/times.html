@@ -9,6 +9,7 @@
   <link rel="icon" type="image/png" href="../img/logo.png">
   <link rel="stylesheet" href="../css/fonte-titulos.css">
   <link rel="stylesheet" href="../css/styles.css">
+  <link rel="stylesheet" href="../css/times.css">
 </head>
 <body data-page="times">
   <header id="hdr" class="site-header"></header>
@@ -18,8 +19,8 @@
     </section>
 
     <section class="section page-content">
-      <p class="meta" role="note">A capacidade padrão de até cinco integrantes é uma proposta sujeita à aprovação da equipe do projeto.</p>
-      <p id="team-status" role="status" aria-live="polite"></p>
+      <p class="meta" role="note">Crie sua equipe, encontre outros combatentes e gerencie solicitações de entrada. O limite máximo configurável nesta versão é de cinco integrantes.</p>
+      <p id="team-status" class="team-status" role="status" aria-live="polite"></p>
 
       <section class="panel" aria-labelledby="team-create-heading">
         <h2 id="team-create-heading">Criar time</h2>
@@ -39,8 +40,18 @@
         </form>
       </section>
 
-      <section aria-labelledby="team-list-heading">
-        <h2 id="team-list-heading">Times cadastrados</h2>
+      <section class="team-list-section" aria-labelledby="team-list-heading">
+        <div class="team-list-heading">
+          <div>
+            <h2 id="team-list-heading">Times cadastrados</h2>
+            <p class="meta">Pesquise pelo nome ou pela descrição de uma equipe.</p>
+          </div>
+          <div class="team-list-actions">
+            <label class="visually-hidden" for="team-search">Buscar time</label>
+            <input id="team-search" type="search" placeholder="Buscar time..." autocomplete="off">
+            <button class="button-secondary compact" type="button" id="refresh-teams">Atualizar</button>
+          </div>
+        </div>
         <div id="team-list" class="card-grid" aria-live="polite"></div>
       </section>
       <section id="team-detail" class="section" aria-live="polite" hidden></section>
