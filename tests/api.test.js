@@ -129,7 +129,7 @@ test('páginas e arquivos estáticos continuam protegidos e preservados', async 
     assert.equal(resposta.headers.get('location'), '/acesso.html');
   }
 
-  for (const rota of ['/acesso.html', '/css/styles.css', '/css/campeonatos.css', '/js/comum.js', '/js/auth.js', '/img/logo.png']) {
+  for (const rota of ['/acesso.html', '/css/styles.css', '/css/campeonatos.css', '/js/comum.js', '/js/auth.js', '/css/como-usar.css', '/css/times.css', '/img/logo.png']) {
     assert.equal((await amb.chamar('GET', rota)).status, 200, rota);
   }
 
@@ -152,7 +152,7 @@ test('páginas e arquivos estáticos continuam protegidos e preservados', async 
 
   for (const rota of [
     '/', '/pages/campeonatos.html', '/pages/ranking.html',
-    '/pages/perfil.html', '/pages/arsenal.html', '/pages/times.html'
+    '/pages/perfil.html', '/pages/arsenal.html', '/pages/times.html', '/pages/como-usar.html'
   ]) {
     const protegida = await amb.chamar('GET', rota, { cookie: jogador.cookie });
     assert.equal(protegida.status, 200, rota);
