@@ -1596,7 +1596,13 @@ test('solicitações de entrada exigem aprovação do responsável e atualizam a
   const duplicada = await amb.chamar('POST', `/api/times/${timeId}/solicitacoes`, {
     cookie: jogador.cookie, corpo: {}
   });
-  assert.equal(duplicada.status, 409);
+  // A RPC usa ON CONFLICT ... DO UPDATE: repetir o pedido mantém a mesma
+  // solicitação pendente e retorna seu identificador, sem criar outra linha.
+  assert.equal(duplicada.status, 201, duplicada.texto);
+  assert.equal(duplicada.json.solicitacao.id, solicitacaoId);
+  assert.equal(amb.supabase.tabelas.solicitacoes_time.filter((item) =>
+    item.time_id === timeId && item.usuario_id === jogador.id && item.status === 'pendente'
+  ).length, 1);
 
   const aprovada = await amb.chamar('POST', `/api/times/solicitacoes/${solicitacaoId}/responder`, {
     cookie: responsavel.cookie, corpo: { decisao: 'aprovar' }
