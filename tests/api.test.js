@@ -1547,7 +1547,7 @@ test('erros 403 do Supabase Auth não são rotulados como falhas de RLS', async 
   assert.doesNotMatch(login.json.mensagem, /políticas de acesso/i);
 });
 
-test('exclusão de conta não está disponível sem a RPC homologada no banco', async (t) => {
+test('exclusão de conta permanece bloqueada e preserva os dados e a sessão', async (t) => {
   const amb = await criarAmbiente();
   t.after(amb.encerrar);
   const jogador = await amb.novoJogador('Conta Sem RPC', 'semrpc@teste.com');
@@ -1555,4 +1555,6 @@ test('exclusão de conta não está disponível sem a RPC homologada no banco', 
   assert.equal(resposta.status, 503);
   assert.match(resposta.json.mensagem, /temporariamente indisponível/i);
   assert.equal(amb.supabase.usuarios.has(jogador.id), true);
+  const perfil = await amb.chamar('GET', '/api/perfil', { cookie: jogador.cookie });
+  assert.equal(perfil.status, 200);
 });
