@@ -441,3 +441,30 @@ body[data-page="times"] input:focus-visible {
     padding: 20px;
   }
 }
+
+
+/* ---------- Formulário de criação de equipes ---------- */
+body[data-page="times"] .team-create-panel {
+  margin-top: 18px;
+}
+body[data-page="times"] #team-create-form {
+  width: min(100%, 760px);
+  margin-top: 18px;
+}
+body[data-page="times"] #team-create-form input,
+body[data-page="times"] #team-create-form textarea {
+  box-sizing: border-box;
+}
+body[data-page="times"] #team-create-form input {
+  min-height: 46px;
+}
+body[data-page="times"] #team-create-form textarea {
+  min-height: 110px;
+}
+body[data-page="times"] #team-create-form .team-visibility-note {
+  margin: 0;
+  font-size: 12px;
+}
+body[data-page="times"] #team-create-form button {
+  min-height: 44px;
+}
