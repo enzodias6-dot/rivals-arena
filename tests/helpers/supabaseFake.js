@@ -711,7 +711,9 @@ function criarSupabaseFake({
   }
 
   function seed(tabela, linha) {
-    tabelas[tabela].push({ id: randomUUID(), ...linha });
+    const registro = { id: randomUUID(), ...linha };
+    tabelas[tabela].push(registro);
+    return registro;
   }
 
   function criarClienteAdmin() {
