@@ -701,7 +701,7 @@ function criarSupabaseFake({
         return Promise.resolve(falha('42883', 'function not found'));
     }
 
-    return Promise.resolve({ data: { ...data }, error: null });
+    return Promise.resolve({ data: data && typeof data === 'object' ? { ...data } : data, error: null });
   }
 
   function criarCliente(accessToken) {
