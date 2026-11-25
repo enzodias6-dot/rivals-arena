@@ -410,6 +410,22 @@ function criarSupabaseFake({
 
     let data;
     switch (nome) {
+      case 'excluir_minha_conta': {
+        if (!usuarios.has(usuarioId)) return Promise.resolve(falha('P0002', 'account_not_found', 404));
+        usuarios.delete(usuarioId);
+        for (const [token, sessao] of tokens) {
+          if (sessao.userId === usuarioId) tokens.delete(token);
+        }
+        for (const [token, sessao] of refreshTokens) {
+          if (sessao.userId === usuarioId) refreshTokens.delete(token);
+        }
+        for (const tabela of Object.values(tabelas)) {
+          for (let i = tabela.length - 1; i >= 0; i -= 1) {
+            if (Object.values(tabela[i]).includes(usuarioId)) tabela.splice(i, 1);
+          }
+        }
+        return Promise.resolve({ data: null, error: null });
+      }
       case 'submeter_resultado_partida':
       case 'contestar_resultado_partida': {
         const contestacao = nome === 'contestar_resultado_partida';
